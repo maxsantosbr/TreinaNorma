@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>TreinaNorma - Layout do Login</title>
+<style>
+  body { font-family: Segoe UI, Arial, sans-serif; background:#f6f8fb; color:#1f2937; margin:24px; }
+  h1 { font-size:20px; }
+  h2 { font-size:15px; margin-top:28px; }
+  .card { background:#fff; border:1px solid #dbe3ee; border-radius:8px; padding:16px; margin-bottom:16px; }
+  .muted { color:#6b7280; font-size:12px; }
+  code { background:#eef2f7; padding:1px 5px; border-radius:4px; }
+</style>
+</head>
+<body>
+
+<h1>TreinaNorma - divisões do layout do login</h1>
+<p class="muted">Diagramas do que o NetBeans mostra no Design. O canvas nao exibe a imagem; a arte so aparece no F6.</p>
+
+<div class="card">
+<h2>1. Hierarquia (Navigator)</h2>
+<pre>
+LoginFrame (JFrame 1200x574, undecorated, shape 48)
+└── panelFundo        PainelFundo / BorderLayout      pinta a imagem
+    └── panelFormulario   WEST / 600x574 / opaque=false
+        └── painelCartao  arredondado / branco
+            ├── lblTitulo
+            ├── txtUsuario
+            ├── txtSenha
+            ├── chkLembrar
+            ├── lblEsqueci
+            ├── btnEntrar
+            └── lblMensagem
+</pre>
+<p class="muted">Indentacao = quem esta dentro de quem. Ordem na lista = z-order (quem vem depois e desenhado por cima).</p>
+</div>
+
+<div class="card">
+<h2>2. BorderLayout no panelFundo</h2>
+<svg width="900" height="440" viewBox="0 0 900 440">
+  <rect x="10" y="10" width="880" height="420" fill="#ffffff" stroke="#94a3b8" stroke-width="2" rx="8"/>
+  <text x="20" y="32" font-size="13" fill="#475569">panelFundo  (1200x574 no runtime; diagrama reduzido)</text>
+
+  <rect x="20" y="44" width="380" height="374" fill="#0aa7e8" opacity="0.18" stroke="#0aa7e8" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="30" y="64" font-size="13" fill="#0369a1">WEST - panelFormulario (600)</text>
+  <text x="30" y="82" font-size="11" fill="#0369a1">transparente; deixa o azul da arte aparecer</text>
+
+  <rect x="410" y="44" width="470" height="374" fill="#f8fafc" stroke="#64748b" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="420" y="64" font-size="13" fill="#334155">CENTER - vazio</text>
+  <text x="420" y="82" font-size="11" fill="#334155">a ilustracao da arte fica visivel aqui</text>
+
+  <rect x="60" y="120" width="300" height="250" fill="#ffffff" stroke="#22c55e" stroke-width="2" rx="24"/>
+  <text x="76" y="146" font-size="12" fill="#15803d">painelCartao (arc 24)</text>
+  <rect x="80" y="162" width="260" height="30" fill="#eef2f7" stroke="#cbd5e1" rx="12"/>
+  <text x="90" y="182" font-size="11" fill="#64748b">txtUsuario</text>
+  <rect x="80" y="204" width="260" height="30" fill="#eef2f7" stroke="#cbd5e1" rx="12"/>
+  <text x="90" y="224" font-size="11" fill="#64748b">txtSenha</text>
+  <rect x="80" y="250" width="260" height="34" fill="#22c55e" rx="17"/>
+  <text x="180" y="272" font-size="12" fill="#ffffff">btnEntrar</text>
+
+  <text x="20" y="432" font-size="11" fill="#94a3b8">Bordas tracejadas = divisao do BorderLayout. Nao sao componentes.</text>
+</svg>
+</div>
+
+<div class="card">
+<h2>3. Icones do menu "Set Layout"</h2>
+<pre>
+[BorderLayout]   retangulo dividido em 5 areas (N, W, C, E, S)
+[FlowLayout]     varios quadradinhos em fileira
+[GridLayout]     grade uniforme 2x2 / 3x3
+[GridBagLayout]  grade com celulas de tamanhos diferentes
+[BoxLayout]      pilha vertical ou horizontal
+[CardLayout]     cartoes empilhados
+[Absolute/null]  icone com "ancoras" nos cantos
+[Free Design]    GroupLayout, com molas (springs) verdes nas bordas
+</pre>
+<p class="muted">Esse menu aparece com botao direito no container -> Set Layout.</p>
+</div>
+
+<div class="card">
+<h2>4. Guias de alinhamento no Design</h2>
+<svg width="900" height="260" viewBox="0 0 900 260">
+  <rect x="10" y="10" width="880" height="240" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+  <text x="20" y="30" font-size="12" fill="#475569">Ao arrastar um componente:</text>
+
+  <line x1="120" y1="50" x2="120" y2="230" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="126" y="60" font-size="11" fill="#ef4444">guia vertical (borda esquerda alinhada)</text>
+
+  <line x1="60" y1="120" x2="860" y2="120" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="700" y="114" font-size="11" fill="#3b82f6">guia horizontal (linha de base)</text>
+
+  <rect x="120" y="95" width="200" height="50" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="2"/>
+  <text x="150" y="125" font-size="12" fill="#0369a1">componente arrastado</text>
+
+  <rect x="60" y="160" width="200" height="50" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+  <text x="90" y="190" font-size="12" fill="#475569">componente vizinho</text>
+</svg>
+<p class="muted">Vermelho/azul tracejado = alinhamento. O container alvo fica contornado em verde/laranja quando aceita o drop.</p>
+</div>
+
+<div class="card">
+<h2>5. O que o Design mostra x o que o F6 mostra</h2>
+<pre>
+DESIGN (Matisse)                 RUNTIME (F6)
+-------------------------------- --------------------------------
+PainelFundo = cor de fundo       PainelFundo = imagem paintComponent
+sem imagem                       imagem esticada em getWidth/getHeight
+sem shape aplicado               cantos arredondados (setShape)
+guias e molas visiveis           apenas o resultado final
+</pre>
+<p class="muted">Por isso a arte nunca aparece no canvas do NetBeans. Valide sempre rodando.</p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>TreinaNorma - Layout do MainFrame</title>
+<style>
+  body { font-family: Segoe UI, Arial, sans-serif; background:#f6f8fb; color:#1f2937; margin:24px; }
+  h1 { font-size:20px; }
+  h2 { font-size:15px; margin-top:0; }
+  .card { background:#fff; border:1px solid #dbe3ee; border-radius:8px; padding:16px; margin-bottom:16px; }
+  .muted { color:#6b7280; font-size:12px; }
+  code { background:#eef2f7; padding:1px 5px; border-radius:4px; }
+  table { border-collapse:collapse; width:100%; font-size:12px; }
+  th,td { border:1px solid #dbe3ee; padding:6px 8px; text-align:left; }
+  th { background:#f2f8fc; color:#1f4e79; }
+
+  /* ---------- mockup da janela ---------- */
+  .win { width:1160px; border-radius:12px; overflow:hidden; box-shadow:0 18px 40px rgba(15,23,42,.18);
+         border:1px solid #cbd5e1; background:#f6f8fb; }
+  .titlebar { height:56px; background:#1f4e79; display:flex; align-items:center; gap:12px; padding:0 12px; color:#fff; }
+  .logo { width:30px; height:30px; border-radius:8px; background:#0aa7e8; color:#06263f; font-weight:700;
+          font-size:12px; display:flex; align-items:center; justify-content:center; }
+  .appname { font-size:13px; font-weight:600; letter-spacing:.2px; }
+  .appname span { font-weight:400; opacity:.75; }
+  .search { margin-left:auto; width:230px; height:28px; border-radius:14px; background:rgba(255,255,255,.14);
+            border:1px solid rgba(255,255,255,.22); color:#dbeafe; font-size:12px; padding:0 12px; }
+  .userchip { display:flex; align-items:center; gap:8px; font-size:12px; padding:4px 10px; border-radius:14px;
+              background:rgba(255,255,255,.12); }
+  .avatar { width:20px; height:20px; border-radius:50%; background:#0aa7e8; color:#06263f; font-size:10px;
+            font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .wbtn { width:26px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center;
+          font-size:12px; color:#dbeafe; }
+  .wbtn:hover { background:rgba(255,255,255,.16); }
+
+  .menubar { height:38px; background:#fff; border-bottom:1px solid #dbe3ee; display:flex; align-items:center;
+             gap:4px; padding:0 14px; font-size:12.5px; color:#334155; }
+  .mi { padding:6px 10px; border-radius:6px; }
+  .mi.on { background:#e8f2fb; color:#1f4e79; font-weight:600; }
+
+  .content { padding:18px 20px 22px; }
+  .headrow { display:flex; align-items:flex-start; margin-bottom:16px; }
+  .headrow h3 { margin:0; font-size:17px; color:#1f2937; }
+  .headrow p { margin:2px 0 0; font-size:12px; color:#6b7280; }
+  .primary { margin-left:auto; background:#1f4e79; color:#fff; font-size:12px; font-weight:600;
+             padding:9px 16px; border-radius:16px; }
+
+  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:16px; }
+  .kpi { background:#fff; border:1px solid #dbe3ee; border-radius:10px; padding:14px 16px; }
+  .kpi .lbl { font-size:11.5px; color:#6b7280; text-transform:uppercase; letter-spacing:.4px; }
+  .kpi .val { font-size:26px; font-weight:700; color:#1f4e79; line-height:1.2; margin-top:4px; }
+  .kpi .sub { font-size:11px; color:#94a3b8; margin-top:2px; }
+  .kpi .sub.warn { color:#b45309; }
+  .kpi .sub.bad { color:#b91c1c; }
+  .kpi .sub.ok { color:#15803d; }
+
+  .cols { display:grid; grid-template-columns:2fr 1fr; gap:14px; }
+  .panel { background:#fff; border:1px solid #dbe3ee; border-radius:10px; overflow:hidden; }
+  .panel .ph { padding:11px 14px; border-bottom:1px solid #eef2f7; font-size:12.5px; font-weight:600; color:#1f4e79;
+               display:flex; align-items:center; }
+  .panel .ph .link { margin-left:auto; font-weight:400; color:#2e75b6; font-size:11.5px; }
+  .tbl { width:100%; border-collapse:collapse; font-size:12px; }
+  .tbl th { background:#f2f8fc; color:#1f4e79; font-weight:600; font-size:11px; text-transform:uppercase;
+            letter-spacing:.3px; border-bottom:1px solid #dbe3ee; padding:8px 12px; text-align:left; }
+  .tbl td { border-bottom:1px solid #f1f5f9; padding:9px 12px; color:#334155; }
+  .pill { display:inline-block; font-size:10.5px; font-weight:600; padding:3px 8px; border-radius:10px; }
+  .pill.bad { background:#fee2e2; color:#b91c1c; }
+  .pill.warn { background:#fef3c7; color:#92400e; }
+  .pill.ok { background:#dcfce7; color:#166534; }
+  .pill.info { background:#e0f2fe; color:#075985; }
+  .quick { display:flex; flex-direction:column; }
+  .qi { padding:10px 14px; border-bottom:1px solid #f1f5f9; font-size:12px; color:#334155; display:flex; gap:8px; }
+  .qi:last-child { border-bottom:0; }
+  .qi b { color:#1f4e79; font-weight:600; }
+  .dot { width:6px; height:6px; border-radius:50%; background:#0aa7e8; margin-top:5px; flex:0 0 auto; }
+  .dot.warn { background:#f59e0b; }
+  .note { padding:12px 14px; font-size:11.5px; color:#475569; background:#fbfdff; }
+
+  .statusbar { height:28px; background:#eef4fa; border-top:1px solid #dbe3ee; display:flex; align-items:center;
+               gap:14px; padding:0 14px; font-size:11px; color:#64748b; }
+  .statusbar .right { margin-left:auto; display:flex; gap:14px; }
+  .live { width:7px; height:7px; border-radius:50%; background:#22c55e; display:inline-block; margin-right:5px; }
+
+  /* ---------- variante B: sidebar ---------- */
+  .win2 { width:660px; border-radius:10px; overflow:hidden; box-shadow:0 12px 30px rgba(15,23,42,.16);
+          border:1px solid #cbd5e1; display:flex; }
+  .side { width:190px; background:#fff; border-right:1px solid #dbe3ee; padding:10px 8px; }
+  .side .brand { display:flex; align-items:center; gap:8px; padding:6px 8px 14px; }
+  .side .brand .logo { width:24px; height:24px; font-size:10px; border-radius:6px; }
+  .side .brand b { font-size:12px; color:#1f4e79; }
+  .si { font-size:11.5px; color:#475569; padding:8px 10px; border-radius:7px; margin-bottom:2px; }
+  .si.on { background:#1f4e79; color:#fff; font-weight:600; }
+  .side .sep { height:1px; background:#eef2f7; margin:8px 4px; }
+  .main2 { flex:1; background:#f6f8fb; }
+  .bar2 { height:36px; background:#1f4e79; display:flex; align-items:center; padding:0 10px; gap:8px; color:#dbeafe; font-size:11px; }
+  .bar2 .wbtn { width:20px; height:20px; font-size:11px; }
+  .body2 { padding:14px; }
+  .k2 { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+  .k2 div { background:#fff; border:1px solid #dbe3ee; border-radius:8px; padding:10px 12px; }
+  .k2 span { font-size:10.5px; color:#6b7280; text-transform:uppercase; letter-spacing:.3px; }
+  .k2 b { display:block; font-size:19px; color:#1f4e79; }
+  .wingap { margin-top:10px; background:#fff; border:1px solid #dbe3ee; border-radius:8px; padding:10px 12px;
+            font-size:11px; color:#64748b; }
+</style>
+</head>
+<body>
+
+<h1>TreinaNorma - layout do MainFrame</h1>
+<p class="muted">Proposta de aparência (o visual do app, nao do NetBeans). Cores da identidade: azul #1F4E79, destaque #0AA7E8, fundo #F6F8FB.</p>
+
+<div class="card">
+<h2>1. Mockup - opcao A (menu superior + dashboard)</h2>
+<div class="win">
+  <div class="titlebar">
+    <div class="logo">TN</div>
+    <div class="appname">TreinaNorma <span>- Gestao de Treinamentos NR</span></div>
+    <div class="search">Buscar colaborador, NR ou certificado...</div>
+    <div class="userchip"><div class="avatar">M</div> Maxwell <span style="opacity:.7">| ADMIN</span></div>
+    <div class="wbtn">&#8211;</div>
+    <div class="wbtn">&#9744;</div>
+    <div class="wbtn">&#10005;</div>
+  </div>
+
+  <div class="menubar">
+    <div class="mi">Arquivo</div>
+    <div class="mi">Cadastros</div>
+    <div class="mi on">Treinamentos</div>
+    <div class="mi">Consultas</div>
+    <div class="mi">Administracao</div>
+    <div class="mi">Conta</div>
+    <div class="mi">Ajuda</div>
+  </div>
+
+  <div class="content">
+    <div class="headrow">
+      <div>
+        <h3>Dashboard</h3>
+        <p>Vigencia dos treinamentos obrigatorios por colaborador e NR.</p>
+      </div>
+      <div class="primary">+ Novo treinamento</div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="lbl">Colaboradores ativos</div><div class="val">128</div><div class="sub ok">12 admitidos este mes</div></div>
+      <div class="kpi"><div class="lbl">Vencem em 30 dias</div><div class="val">7</div><div class="sub warn">4 treinamentos criticos</div></div>
+      <div class="kpi"><div class="lbl">Vencidos</div><div class="val">2</div><div class="sub bad">Acao imediata</div></div>
+      <div class="kpi"><div class="lbl">Certificados no ano</div><div class="val">312</div><div class="sub">Ultimo emitido hoje</div></div>
+    </div>
+
+    <div class="cols">
+      <div class="panel">
+        <div class="ph">Treinamentos vencendo <span class="link">ver todos</span></div>
+        <table class="tbl">
+          <tr><th>Colaborador</th><th>NR / Treinamento</th><th>Validade</th><th>Status</th></tr>
+          <tr><td>Joao da Silva</td><td>NR-35 - Trabalho em altura</td><td>27/10/2026</td><td><span class="pill warn">Vence em 5 d</span></td></tr>
+          <tr><td>Maria Souza</td><td>NR-33 - Espaco confinado</td><td>24/10/2026</td><td><span class="pill warn">Vence em 2 d</span></td></tr>
+          <tr><td>Carlos Lima</td><td>NR-10 - Basico em eletricidade</td><td>18/10/2026</td><td><span class="pill bad">Vencido</span></td></tr>
+          <tr><td>Ana Paula</td><td>NR-05 - CIPA (GR 3)</td><td>05/11/2026</td><td><span class="pill info">26 d</span></td></tr>
+          <tr><td>Pedro Alves</td><td>NR-11 - Empilhadeira</td><td>12/11/2026</td><td><span class="pill ok">33 d</span></td></tr>
+        </table>
+      </div>
+
+      <div>
+        <div class="panel" style="margin-bottom:14px">
+          <div class="ph">Acoes rapidas</div>
+          <div class="quick">
+            <div class="qi"><div class="dot"></div><div><b>Registrar treinamento</b><br>lancar execucao e presenca</div></div>
+            <div class="qi"><div class="dot"></div><div><b>Emitir certificado</b><br>gerar PDF com base legal</div></div>
+            <div class="qi"><div class="dot"></div><div><b>Importar colaboradores</b><br>CSV ou cadastro manual</div></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="ph">Avisos</div>
+          <div class="note">
+            <div style="margin-bottom:6px"><span class="dot warn" style="display:inline-block"></span> CIPA: mandato vence em 15 dias.</div>
+            <div><span class="dot" style="display:inline-block"></span> 3 linhas da matriz sem CH fixada na NR (referencia de mercado).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <div><span class="live"></span>SQLite conectado - treinanorma.db</div>
+    <div>Ultimo backup: hoje 08:12</div>
+    <div class="right"><div>Maxwell - ADMIN</div><div>22/10/2026 13:56</div></div>
+  </div>
+</div>
+<p class="muted">Em Swing/FlatLaf: <code>JFrame</code> undecorated + <code>setShape(RoundRectangle2D)</code>, title bar em <code>JPanel</code> azul, menu com <code>JMenuBar</code> (sem borda), dashboard em <code>JPanel</code> com <code>GridLayout</code>/<code>GridBagLayout</code> e <code>JTable</code>.</p>
+</div>
+
+<div class="card">
+<h2>2. Mockup - opcao B (menu lateral)</h2>
+<div class="win2">
+  <div class="side">
+    <div class="brand"><div class="logo">TN</div><b>TreinaNorma</b></div>
+    <div class="si on">Dashboard</div>
+    <div class="si">Colaboradores</div>
+    <div class="si">Treinamentos</div>
+    <div class="si">Matriz NR</div>
+    <div class="si">Certificados</div>
+    <div class="sep"></div>
+    <div class="si">Relatorios</div>
+    <div class="si">Usuarios</div>
+    <div class="si">Configuracoes</div>
+  </div>
+  <div class="main2">
+    <div class="bar2">
+      <span>Dashboard</span>
+      <div class="wbtn" style="margin-left:auto">&#8211;</div>
+      <div class="wbtn">&#9744;</div>
+      <div class="wbtn">&#10005;</div>
+    </div>
+    <div class="body2">
+      <div class="k2">
+        <div><span>Vencem em 30 d</span><b>7</b></div>
+        <div><span>Vencidos</span><b>2</b></div>
+        <div><span>Colaboradores</span><b>128</b></div>
+        <div><span>Certificados</span><b>312</b></div>
+      </div>
+      <div class="wingap">Area de conteudo (CardLayout) - troca conforme o item do menu lateral.</div>
+    </div>
+  </div>
+</div>
+<p class="muted">Mais bonita, mas exige <code>CardLayout</code> e botoes no lugar de <code>JMenuBar</code>. Custa mais passos no Matisse.</p>
+</div>
+
+<div class="card">
+<h2>3. Arvore de componentes (opcao A, para montar no Matisse)</h2>
+<pre>
+MainFrame (JFrame 1200x760, undecorated)
+└── panelRaiz                  BorderLayout
+    ├── panelTopo              NORTH / 56 px / #1F4E79
+    │   ├── lblLogo
+    │   ├── lblTitulo
+    │   ├── txtBusca
+    │   ├── btnMinimizar / btnMaximizar / btnFechar
+    │   └── lblUsuario          "Maxwell - ADMIN"
+    ├── menuPrincipal          NORTH / JMenuBar
+    │   ├── mnuArquivo          Sair, Backup, Restaurar
+    │   ├── mnuCadastros        Colaboradores, Empresas, Instrutores
+    │   ├── mnuTreinamentos     Registrar, Certificados, Matriz NR
+    │   ├── mnuConsultas        Vencimentos, Historico, Por NR
+    │   ├── mnuAdministracao    Usuarios, Perfis, Parametros   (so ADMIN)
+    │   ├── mnuConta            Trocar senha, Sobre
+    │   └── mnuAjuda            Manual, Sobre
+    ├── panelConteudo          CENTER / #F6F8FB
+    │   ├── panelCabecalho     titulo + subtitulo + btnNovo
+    │   ├── panelKpis          GridLayout 1x4
+    │   │   └── cardKpi x4      (icone, rotulo, valor, legenda)
+    │   └── panelCorpo         GridBagLayout 2 colunas (2:1)
+    │       ├── panelTabela    JScrollPane > tblVencendo (JTable)
+    │       └── panelLateral
+    │           ├── panelAcoes  botoes de acao rapida
+    │           └── panelAvisos
+    └── panelStatus            SOUTH / 28 px / #EEF4FA
+        ├── lblConexao
+        ├── lblBackup
+        └── lblSessao           usuario + data
+</pre>
+<p class="muted">Telas de cadastro abrem em <code>JFrame</code> proprio (ex.: <code>CadastroColaboradorFrame</code>), nao dentro do MainFrame. Assim cada uma tem seu proprio <code>.form</code> e fica simples de manter.</p>
+</div>
+
+<div class="card">
+<h2>4. Menus visiveis por perfil</h2>
+<table>
+  <tr><th>Menu</th><th>ADMIN</th><th>INSTRUTOR</th><th>CONSULTA</th></tr>
+  <tr><td>Arquivo</td><td>sim</td><td>sim</td><td>sim</td></tr>
+  <tr><td>Cadastros</td><td>sim</td><td>sim (sem Empresas)</td><td>nao</td></tr>
+  <tr><td>Treinamentos</td><td>sim</td><td>sim</td><td>somente leitura</td></tr>
+  <tr><td>Consultas</td><td>sim</td><td>sim</td><td>sim</td></tr>
+  <tr><td>Administracao</td><td>sim</td><td>nao</td><td>nao</td></tr>
+  <tr><td>Conta / Ajuda</td><td>sim</td><td>sim</td><td>sim</td></tr>
+</table>
+<p class="muted">Aplicado no construtor do MainFrame: <code>mnuAdministracao.setVisible(Sessao.getUsuario().getPerfil() == Perfil.ADMIN)</code>.</p>
+</div>
+
+<div class="card">
+<h2>5. Decisoes de aparencia</h2>
+<pre>
+Item                     Escolha recomendada            Motivo
+------------------------ ------------------------------ ---------------------------------
+Moldura da janela        undecorated + setShape(18)     mesma identidade do login
+Arrastar janela          mousePressed/Released no topo  reaproveita o codigo do login
+Botoes da janela         customizados (- quadrado X)    sem barra nativa cinza
+Fonte                    Segoe UI 12/13                 padrao do Windows, limpa
+Tabela                   JTable + FlatLaf + zebra       legivel, sem plugin extra
+Status                   "vencido / vence em N d / ok"  regra: validade nula = "revisar PGR"
+</pre>
+<p class="muted">Se preferir simplicidade maxima, use um <code>JFrame</code> normal (com barra do Windows) e mantenha apenas o painel azul por dentro. Mesmo codigo, menos passos.</p>
+</div>
+
+</body>
+</html>
