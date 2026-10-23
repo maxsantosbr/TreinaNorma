@@ -1,6 +1,9 @@
 package br.com.treinanorma.view;
 
 import br.com.treinanorma.dao.Conexao;
+import br.com.treinanorma.dao.InstrutorDAO;
+import br.com.treinanorma.dao.MatrizDAO;
+import br.com.treinanorma.dao.ParametroDAO;
 import br.com.treinanorma.dao.RegistroDAO;
 import br.com.treinanorma.model.Perfil;
 import br.com.treinanorma.model.RegistroTreinamento;
@@ -49,6 +52,7 @@ import java.time.chrono.ChronoLocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -128,6 +132,12 @@ public class MainFrame extends JFrame {
             MainFrame.this.sair();
          }
       });
+      this.backupAutomatico();
+   }
+
+   private int diasAlerta() {
+      int dias = new ParametroDAO().inteiro("alerta_vencimento_dias", 30);
+      return Math.max(1, Math.min(3650, dias));
    }
 
    private void montarTela() {
@@ -241,9 +251,11 @@ public class MainFrame extends JFrame {
       barra.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, BORDA));
       barra.setPreferredSize(new Dimension(0, 38));
       JMenu arquivo = this.menu("Arquivo");
-      arquivo.add(this.item("Backup do banco", this::backup));
-      arquivo.add(this.item("Restaurar backup", this::restaurar));
-      arquivo.addSeparator();
+      if (this.perfil == Perfil.ADMIN) {
+         arquivo.add(this.item("Backup do banco", this::backup));
+         arquivo.add(this.item("Restaurar backup", this::restaurar));
+         arquivo.addSeparator();
+      }
       arquivo.add(this.item("Sair", this::sair));
       JMenu cadastros = this.menu("Cadastros");
       cadastros.add(this.item("Empresas / estabelecimentos", () -> this.abrirTela(new EmpresaPanel(this::mostrarDashboard))));
@@ -255,8 +267,8 @@ public class MainFrame extends JFrame {
       treinamentos.add(this.item("Matriz de treinamento por NR", () -> this.abrirTela(new MatrizPanel(this::mostrarDashboard))));
       JMenu consultas = this.menu("Consultas");
       consultas.add(this.item("Vencimentos", () -> this.abrirTela(new VencimentosPanel(this::mostrarDashboard))));
-      consultas.add(this.item("Histórico do colaborador", () -> this.abrirTela(new ColaboradoresPanel(this::mostrarDashboard))));
-      consultas.add(this.item("Treinamentos por NR", () -> this.abrirTela(new CertificadosPanel(this::mostrarDashboard))));
+      consultas.add(this.item("Histórico do colaborador", () -> this.abrirTela(new ColaboradoresPanel(this::mostrarDashboard, true))));
+      consultas.add(this.item("Treinamentos por NR", () -> this.abrirTela(new CertificadosPanel(this::mostrarDashboard, true))));
       JMenu administracao = this.menu("Administração");
       administracao.add(this.item("Usuários", () -> this.abrirTela(new UsuariosPanel(this::mostrarDashboard))));
       administracao.add(this.item("Parâmetros do sistema", () -> this.abrirTela(new ParametrosPanel(this::mostrarDashboard))));
@@ -267,8 +279,12 @@ public class MainFrame extends JFrame {
       ajuda.add(this.item("Manual", this::manual));
       ajuda.add(this.item("Sobre", this::sobre));
       barra.add(arquivo);
-      barra.add(cadastros);
-      barra.add(treinamentos);
+      if (this.perfil == Perfil.ADMIN) {
+         barra.add(cadastros);
+      }
+      if (this.perfil != Perfil.CONSULTA) {
+         barra.add(treinamentos);
+      }
       barra.add(consultas);
       if (this.perfil == Perfil.ADMIN) {
          barra.add(administracao);
@@ -313,18 +329,20 @@ public class MainFrame extends JFrame {
       titulos.add(Box.createVerticalStrut(2));
       titulos.add(legenda);
       cabecalho.add(titulos, "West");
-      JButton novo = new JButton("+ Novo treinamento");
-      novo.setFont(new Font("Segoe UI", 1, 12));
-      novo.setBackground(AZUL);
-      novo.setForeground(Color.WHITE);
-      novo.setFocusPainted(false);
-      novo.setBorder(BorderFactory.createEmptyBorder(9, 18, 9, 18));
-      novo.setCursor(Cursor.getPredefinedCursor(12));
-      novo.addActionListener(e -> this.abrirTela(new TurmasPanel(this::mostrarDashboard)));
-      JPanel acao = new JPanel(new BorderLayout());
-      acao.setOpaque(false);
-      acao.add(novo, "North");
-      cabecalho.add(acao, "East");
+      if (this.perfil != Perfil.CONSULTA) {
+         JButton novo = new JButton("+ Novo treinamento");
+         novo.setFont(new Font("Segoe UI", 1, 12));
+         novo.setBackground(AZUL);
+         novo.setForeground(Color.WHITE);
+         novo.setFocusPainted(false);
+         novo.setBorder(BorderFactory.createEmptyBorder(9, 18, 9, 18));
+         novo.setCursor(Cursor.getPredefinedCursor(12));
+         novo.addActionListener(e -> this.abrirTela(new TurmasPanel(this::mostrarDashboard)));
+         JPanel acao = new JPanel(new BorderLayout());
+         acao.setOpaque(false);
+         acao.add(novo, "North");
+         cabecalho.add(acao, "East");
+      }
       conteudo.add(cabecalho, "North");
       JPanel centro = new JPanel(new BorderLayout(0, 14));
       centro.setOpaque(false);
@@ -344,15 +362,16 @@ public class MainFrame extends JFrame {
    private void atualizarKpis() {
       if (this.painelKpis != null) {
          int[] resumo;
+         int dias = this.diasAlerta();
          try {
-            resumo = this.registroDAO.resumo();
+            resumo = this.registroDAO.resumo(dias);
          } catch (RuntimeException var3) {
             resumo = new int[]{0, 0, 0, 0};
          }
 
          this.painelKpis.removeAll();
          this.painelKpis.add(this.cartaoKpi("Colaboradores ativos", String.valueOf(resumo[0]), "cadastrados no sistema", new Color(21, 128, 61)));
-         this.painelKpis.add(this.cartaoKpi("Vencem em 30 dias", String.valueOf(resumo[1]), "programar reciclagem", new Color(180, 83, 9)));
+         this.painelKpis.add(this.cartaoKpi("Vencem em " + dias + " dias", String.valueOf(resumo[1]), "programar reciclagem", new Color(180, 83, 9)));
          this.painelKpis.add(this.cartaoKpi("Vencidos", String.valueOf(resumo[2]), "ação imediata", new Color(185, 28, 28)));
          this.painelKpis.add(this.cartaoKpi("Certificados no ano", String.valueOf(resumo[3]), "emitidos em " + LocalDate.now().getYear(), SUAVE));
          this.painelKpis.revalidate();
@@ -480,7 +499,7 @@ public class MainFrame extends JFrame {
          try {
             List<RegistroTreinamento> vencidos = this.registroDAO.listar(null, "VENCIDOS");
             vencidos.sort((a, b) -> b.getValidade().compareTo((ChronoLocalDate)a.getValidade()));
-            List<RegistroTreinamento> proximos = this.registroDAO.vencimentosProximos(30, 12);
+            List<RegistroTreinamento> proximos = this.registroDAO.vencimentosProximos(this.diasAlerta(), 12);
             int adicionados = 0;
 
             for (RegistroTreinamento r : vencidos) {
@@ -523,9 +542,23 @@ public class MainFrame extends JFrame {
       JPanel lista = new JPanel();
       lista.setOpaque(false);
       lista.setLayout(new BoxLayout(lista, 1));
-      lista.add(this.linhaAcao("Registrar treinamento", "lançar execução e presença", false, () -> this.abrirTela(new TurmasPanel(this::mostrarDashboard))));
-      lista.add(this.linhaAcao("Emitir certificado", "gerar PDF com base legal", false, () -> this.abrirTela(new CertificadosPanel(this::mostrarDashboard))));
-      lista.add(this.linhaAcao("Importar colaboradores", "CSV ou cadastro manual", false, () -> this.abrirTela(new ColaboradoresPanel(this::mostrarDashboard))));
+      if (this.perfil == Perfil.CONSULTA) {
+         lista.add(this.linhaAcao("Consultar vencimentos", "treinamentos vencidos e próximos",
+                 false, () -> this.abrirTela(new VencimentosPanel(this::mostrarDashboard))));
+         lista.add(this.linhaAcao("Histórico do colaborador", "treinamentos por pessoa",
+                 false, () -> this.abrirTela(new ColaboradoresPanel(this::mostrarDashboard, true))));
+         lista.add(this.linhaAcao("Treinamentos por NR", "consulta por norma regulamentadora",
+                 false, () -> this.abrirTela(new CertificadosPanel(this::mostrarDashboard, true))));
+      } else {
+         lista.add(this.linhaAcao("Registrar treinamento", "lançar execução e presença",
+                 false, () -> this.abrirTela(new TurmasPanel(this::mostrarDashboard))));
+         lista.add(this.linhaAcao("Emitir certificado", "gerar PDF com base legal",
+                 false, () -> this.abrirTela(new CertificadosPanel(this::mostrarDashboard))));
+         if (this.perfil == Perfil.ADMIN) {
+            lista.add(this.linhaAcao("Importar colaboradores", "CSV ou cadastro manual",
+                    false, () -> this.abrirTela(new ColaboradoresPanel(this::mostrarDashboard))));
+         }
+      }
       cartao.add(lista, "Center");
       return cartao;
    }
@@ -560,11 +593,45 @@ public class MainFrame extends JFrame {
       lista.setOpaque(false);
       lista.setLayout(new BoxLayout(lista, 1));
       lista.setBorder(BorderFactory.createEmptyBorder(10, 14, 12, 14));
-      lista.add(this.aviso("CIPA: mandato vence em 15 dias.", true));
-      lista.add(Box.createVerticalStrut(6));
-      lista.add(this.aviso("3 linhas da matriz sem CH fixada na NR (referência de mercado).", false));
+      int vencidos = 0;
+      int semCh = 0;
+      int habilitacoes = 0;
+      try {
+         vencidos = this.registroDAO.resumo(this.diasAlerta())[2];
+      } catch (RuntimeException var7) {
+      }
+      try {
+         semCh = (new MatrizDAO()).semChFixa();
+      } catch (RuntimeException var6) {
+      }
+      try {
+         habilitacoes = (new InstrutorDAO()).habilitacoesVencidas();
+      } catch (RuntimeException var5) {
+      }
+
+      int total = 0;
+      if (vencidos > 0) {
+         lista.add(this.aviso(vencidos + " treinamento(s) vencido(s): priorize a reciclagem.", true));
+         total++;
+      }
+      if (habilitacoes > 0) {
+         if (total++ > 0) {
+            lista.add(Box.createVerticalStrut(6));
+         }
+         lista.add(this.aviso(habilitacoes + " habilitação(ões) de instrutor vencida(s).", true));
+      }
+      if (semCh > 0) {
+         if (total++ > 0) {
+            lista.add(Box.createVerticalStrut(6));
+         }
+         lista.add(this.aviso(semCh + " linha(s) da matriz sem CH fixada na NR.", false));
+      }
+      if (total == 0) {
+         lista.add(this.aviso("Nenhum vencimento crítico no momento.", false));
+      }
       lista.add(Box.createVerticalStrut(6));
       lista.add(this.aviso("Treinamentos com validade nula seguem o PGR, não vencem.", false));
+      lista.add(Box.createVerticalGlue());
       cartao.add(lista, "Center");
       return cartao;
    }
@@ -580,6 +647,7 @@ public class MainFrame extends JFrame {
       l.setForeground(new Color(71, 85, 105));
       linha.add(l);
       linha.add(Box.createHorizontalGlue());
+      linha.setMaximumSize(new Dimension(Integer.MAX_VALUE, l.getPreferredSize().height + 4));
       return linha;
    }
 
@@ -762,6 +830,44 @@ public class MainFrame extends JFrame {
          }
       } catch (Exception var4) {
          Ui.erro(this, "Falha ao gerar backup: " + var4.getMessage());
+      }
+   }
+
+   private void backupAutomatico() {
+      if (!(new ParametroDAO()).sim("backup_automatico", false)) {
+         return;
+      }
+      try {
+         File origem = new File(Conexao.caminho());
+         if (!origem.isFile()) {
+            return;
+         }
+         File ultimo = this.ultimoBackup();
+         if (ultimo != null && this.mesmoDia(ultimo, new Date())) {
+            return;
+         }
+         String nome = "treinanorma-" + new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date()) + ".db";
+         File destino = new File(this.pastaBackup(), nome);
+         Files.copy(origem.toPath(), destino.toPath(), StandardCopyOption.REPLACE_EXISTING);
+         this.limparBackups(30);
+         this.atualizarStatus();
+      } catch (Exception var4) {
+      }
+   }
+
+   private boolean mesmoDia(File arquivo, Date data) {
+      SimpleDateFormat formato = new SimpleDateFormat("yyyyMMdd");
+      return formato.format(new Date(arquivo.lastModified())).equals(formato.format(data));
+   }
+
+   private void limparBackups(int manter) {
+      File[] arquivos = this.pastaBackup().listFiles((dir, nome) -> nome.endsWith(".db"));
+      if (arquivos == null || arquivos.length <= manter) {
+         return;
+      }
+      Arrays.sort(arquivos, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+      for (int i = manter; i < arquivos.length; i++) {
+         arquivos[i].delete();
       }
    }
 

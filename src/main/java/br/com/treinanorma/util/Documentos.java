@@ -1,6 +1,7 @@
 package br.com.treinanorma.util;
 
 import br.com.treinanorma.dao.ColaboradorDAO;
+import br.com.treinanorma.dao.ParametroDAO;
 import br.com.treinanorma.dao.RegistroDAO;
 import br.com.treinanorma.model.Colaborador;
 import br.com.treinanorma.model.Empresa;
@@ -49,10 +50,32 @@ public final class Documentos {
     }
 
     public static File pasta() {
-        File pasta = new File(System.getProperty("user.home") + File.separator
-                + "TreinaNorma" + File.separator + "Documentos");
+        String configurada = parametro("pasta_documentos", "");
+        File pasta;
+        if (configurada.isBlank()) {
+            pasta = new File(System.getProperty("user.home") + File.separator
+                    + "TreinaNorma" + File.separator + "Documentos");
+        } else {
+            pasta = new File(configurada);
+            if (!pasta.isAbsolute()) {
+                pasta = new File(System.getProperty("user.home"), configurada);
+            }
+        }
         pasta.mkdirs();
+        if (!pasta.isDirectory()) {
+            pasta = new File(System.getProperty("user.home") + File.separator
+                    + "TreinaNorma" + File.separator + "Documentos");
+            pasta.mkdirs();
+        }
         return pasta;
+    }
+
+    private static String parametro(String chave, String padrao) {
+        try {
+            return new ParametroDAO().valor(chave, padrao);
+        } catch (RuntimeException e) {
+            return padrao;
+        }
     }
 
     private static Font fonte(float tamanho, int estilo) {
@@ -464,6 +487,17 @@ public final class Documentos {
         validade.setSpacingAfter(26);
         doc.add(validade);
 
+        String cidade = parametro("cidade_emissao", "");
+        if (!cidade.isBlank()) {
+            LocalDate emissao = registro.getEmitidoEm() == null
+                    ? LocalDate.now() : registro.getEmitidoEm().toLocalDate();
+            Paragraph local = new Paragraph(cidade + ", " + data(emissao) + ".",
+                    fonte(9, Font.NORMAL));
+            local.setAlignment(Element.ALIGN_CENTER);
+            local.setSpacingAfter(6);
+            doc.add(local);
+        }
+
         PdfPTable assinaturas = new PdfPTable(2);
         assinaturas.setWidthPercentage(72);
         assinaturas.addCell(linhaAssinatura(
@@ -490,6 +524,13 @@ public final class Documentos {
         rodape.setAlignment(Element.ALIGN_CENTER);
         rodape.setSpacingBefore(16);
         doc.add(rodape);
+
+        String textoRodape = parametro("texto_rodape_certificado", "");
+        if (!textoRodape.isBlank()) {
+            Paragraph gerado = new Paragraph(textoRodape, fonte(7, Font.NORMAL, CINZA));
+            gerado.setAlignment(Element.ALIGN_CENTER);
+            doc.add(gerado);
+        }
 
         doc.close();
         return destino;

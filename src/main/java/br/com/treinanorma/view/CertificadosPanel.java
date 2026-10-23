@@ -2,6 +2,7 @@ package br.com.treinanorma.view;
 
 import br.com.treinanorma.dao.EmpresaDAO;
 import br.com.treinanorma.dao.InstrutorDAO;
+import br.com.treinanorma.dao.ParametroDAO;
 import br.com.treinanorma.dao.RegistroDAO;
 import br.com.treinanorma.dao.TurmaDAO;
 import br.com.treinanorma.model.Instrutor;
@@ -10,6 +11,7 @@ import br.com.treinanorma.model.Turma;
 import br.com.treinanorma.util.Cpf;
 import br.com.treinanorma.util.Datas;
 import br.com.treinanorma.util.Documentos;
+import br.com.treinanorma.util.Permissoes;
 import br.com.treinanorma.util.Sessao;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
@@ -53,6 +55,7 @@ public class CertificadosPanel extends TelaBase {
     private final JTextField busca = Ui.campo("Buscar por colaborador, CPF, NR ou certificado...");
     private final JComboBox<String> filtro = Ui.combo("Todos", "Vencidos", "Vencem em 30 dias",
             "Sem validade (PGR)", "Já certificados");
+    private final JComboBox<String> norma = Ui.combo("Todas as NRs");
     private final JTextField de = Ui.campo("dd/mm/aaaa");
     private final JTextField ate = Ui.campo("dd/mm/aaaa");
     private final Modelo modelo = new Modelo();
@@ -63,9 +66,31 @@ public class CertificadosPanel extends TelaBase {
     private final List<Integer> ids = new ArrayList<>();
     private final Set<Integer> marcados = new HashSet<>();
     private final JButton lote = Ui.primario("Emitir selecionados");
+    private final boolean porNorma;
+    private final boolean somenteLeitura = Permissoes.somenteLeitura();
+    private final int diasAlerta = new ParametroDAO().inteiro("alerta_vencimento_dias", 30);
 
     public CertificadosPanel(Runnable voltar) {
-        super("Certificados", "Emissão em PDF, segunda via e validação por código de verificação.", voltar);
+        this(voltar, false);
+    }
+
+    public CertificadosPanel(Runnable voltar, boolean porNorma) {
+        super(porNorma ? "Treinamentos por NR" : "Certificados",
+                porNorma
+                        ? "Consulte os treinamentos registrados por norma regulamentadora."
+                        : "Emissão em PDF, segunda via e validação por código de verificação.",
+                voltar);
+        this.porNorma = porNorma;
+        filtro.removeItemAt(2);
+        filtro.insertItemAt("Vencem em " + diasAlerta + " dias", 2);
+        filtro.setSelectedIndex(0);
+        if (porNorma) {
+            for (String n : dao.normas()) {
+                norma.addItem(n);
+            }
+            norma.setPreferredSize(new Dimension(130, 30));
+            norma.addActionListener(e -> carregar());
+        }
         tabela.setModel(modelo);
         ordenador = new TableRowSorter<DefaultTableModel>(modelo);
         ordenador.setSortable(0, false);
@@ -131,6 +156,13 @@ public class CertificadosPanel extends TelaBase {
         filtro.setPreferredSize(new Dimension(170, 30));
         filtro.addActionListener(e -> carregar());
         linhaBusca.add(filtro, BorderLayout.EAST);
+        if (porNorma) {
+            JPanel direita = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+            direita.setOpaque(false);
+            direita.add(norma);
+            direita.add(filtro);
+            linhaBusca.add(direita, BorderLayout.EAST);
+        }
 
         JPanel linhaPeriodo = Ui.linhaEsquerda(Ui.rotulo("Período"),
                 de, new JLabel("a"), ate,
@@ -170,8 +202,10 @@ public class CertificadosPanel extends TelaBase {
         segundaVia.addActionListener(e -> emitir());
         JButton abrir = Ui.secundario("Abrir PDF");
         abrir.addActionListener(e -> abrirSelecionado());
-        rodape.add(lote);
-        rodape.add(segundaVia);
+        if (!somenteLeitura) {
+            rodape.add(lote);
+            rodape.add(segundaVia);
+        }
         rodape.add(abrir);
         cartao.add(rodape, BorderLayout.SOUTH);
 
@@ -207,7 +241,13 @@ public class CertificadosPanel extends TelaBase {
     private void carregar() {
         try {
             lista.clear();
-            lista.addAll(dao.listar(null, filtroChave()));
+            List<RegistroTreinamento> todos = dao.listar(null, filtroChave());
+            for (RegistroTreinamento r : todos) {
+                if (!porNorma || norma.getSelectedIndex() <= 0
+                        || norma.getSelectedItem().equals(r.getNorma())) {
+                    lista.add(r);
+                }
+            }
             modelo.setRowCount(0);
             ids.clear();
             for (RegistroTreinamento r : lista) {
@@ -237,7 +277,7 @@ public class CertificadosPanel extends TelaBase {
             return "Vencido";
         }
         long dias = ChronoUnit.DAYS.between(hoje, r.getValidade());
-        if (dias <= 30) {
+        if (dias <= diasAlerta) {
             return "Vence em " + dias + " d";
         }
         return "Válido";

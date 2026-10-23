@@ -203,10 +203,67 @@ public class LoginFrame extends javax.swing.JFrame {
         }
 
         br.com.treinanorma.util.Sessao.iniciar(logado);
+        if (logado.isDeveTrocarSenha() && !this.trocarSenhaObrigatoria(logado)) {
+            br.com.treinanorma.util.Sessao.encerrar();
+            campoSenha.setText("");
+            campoSenha.requestFocusInWindow();
+            return;
+        }
         new MainFrame().setVisible(true);
         setVisible(false);
         dispose();
     }//GEN-LAST:event_btnLoginActionPerformed
+
+    private boolean trocarSenhaObrigatoria(Usuario logado) {
+        final boolean[] alterada = {false};
+        javax.swing.JDialog d = Ui.dialogo(this, "Primeiro acesso", 440, 320);
+        javax.swing.JPasswordField nova = Ui.senha("mínimo 6 caracteres");
+        javax.swing.JPasswordField confirmar = Ui.senha();
+        javax.swing.JPanel form = Ui.formulario();
+        java.awt.GridBagConstraints gbc = Ui.gbc();
+        Ui.campo(form, gbc, 0, 0, "Nova senha", nova, 1);
+        Ui.campo(form, gbc, 0, 1, "Confirmar", confirmar, 1);
+
+        javax.swing.JPanel corpo = new javax.swing.JPanel(new java.awt.BorderLayout(0, 10));
+        corpo.setOpaque(false);
+        corpo.setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 18, 8, 18));
+        corpo.add(Ui.subtitulo("Por segurança, defina uma nova senha antes de continuar."),
+                java.awt.BorderLayout.NORTH);
+        corpo.add(form, java.awt.BorderLayout.CENTER);
+
+        javax.swing.JButton salvar = Ui.primario("Salvar senha");
+        javax.swing.JButton cancelar = Ui.secundario("Cancelar");
+        javax.swing.JPanel rodape = new javax.swing.JPanel(
+                new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 8, 8));
+        rodape.add(cancelar);
+        rodape.add(salvar);
+
+        salvar.addActionListener(e -> {
+            String texto = new String(nova.getPassword());
+            if (texto.length() < 6) {
+                Ui.aviso(d, "A senha deve ter ao menos 6 caracteres.");
+                return;
+            }
+            if (!texto.equals(new String(confirmar.getPassword()))) {
+                Ui.aviso(d, "As senhas não conferem.");
+                return;
+            }
+            try {
+                new br.com.treinanorma.dao.UsuarioDAO().trocarSenha(logado.getId(), texto);
+                logado.setDeveTrocarSenha(false);
+                alterada[0] = true;
+                d.dispose();
+            } catch (RuntimeException ex) {
+                Ui.erro(d, ex);
+            }
+        });
+        cancelar.addActionListener(e -> d.dispose());
+
+        d.add(corpo, java.awt.BorderLayout.CENTER);
+        d.add(rodape, java.awt.BorderLayout.SOUTH);
+        d.setVisible(true);
+        return alterada[0];
+    }
 
     /**
      * @param args the command line arguments

@@ -53,7 +53,8 @@ public class RegistroDAO {
                 ps.setString(i++, hoje);
             } else if ("VENCE30".equals(filtro)) {
                 ps.setString(i++, hoje);
-                ps.setString(i++, LocalDate.now().plusDays(31).toString());
+                int dias = new ParametroDAO().inteiro("alerta_vencimento_dias", 30);
+                ps.setString(i++, LocalDate.now().plusDays(Math.max(1, dias)).toString());
             }
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -193,6 +194,10 @@ public class RegistroDAO {
     }
 
     public int[] resumo() {
+        return resumo(30);
+    }
+
+    public int[] resumo(int dias) {
         int colaboradores = 0;
         int vencendo = 0;
         int vencidos = 0;
@@ -205,7 +210,7 @@ public class RegistroDAO {
             vencendo = contar(con,
                     "SELECT COUNT(*) FROM registro_treinamento WHERE validade IS NOT NULL "
                     + "AND validade >= ? AND validade <= ?",
-                    Datas.hojeIso(), LocalDate.now().plusDays(30).toString());
+                    Datas.hojeIso(), LocalDate.now().plusDays(dias).toString());
             certificados = contar(con,
                     "SELECT COUNT(*) FROM certificado WHERE emitido_em LIKE ?",
                     LocalDate.now().getYear() + "%", null);
@@ -228,6 +233,21 @@ public class RegistroDAO {
                 return rs.next() ? rs.getInt(1) : 0;
             }
         }
+    }
+
+    public List<String> normas() {
+        List<String> lista = new ArrayList<>();
+        try (Connection con = Conexao.abrir();
+             Statement st = con.createStatement();
+             ResultSet rs = st.executeQuery(
+                     "SELECT DISTINCT norma FROM registro_treinamento ORDER BY norma")) {
+            while (rs.next()) {
+                lista.add(rs.getString(1));
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Erro ao listar normas", e);
+        }
+        return lista;
     }
 
     public int totalRegistros() {

@@ -11,7 +11,9 @@ import br.com.treinanorma.util.Cpf;
 import br.com.treinanorma.util.Datas;
 import br.com.treinanorma.util.Excel;
 import br.com.treinanorma.util.Fotos;
+import br.com.treinanorma.util.Permissoes;
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -40,7 +42,9 @@ import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.RowFilter;
+import javax.swing.SwingConstants;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 
@@ -51,12 +55,23 @@ public class ColaboradoresPanel extends TelaBase {
     private final SetorDAO setores = new SetorDAO();
 
     private final JTextField busca = Ui.campo("Buscar por nome, CPF, matrícula ou cargo...");
-    private final JTable tabela = Ui.tabela("Nome", "CPF", "Cargo", "Setor", "Matrícula", "Status");
+    private final JTable tabela = Ui.tabela("Nome", "CPF", "Cargo", "Setor", "Matrícula", "Status", "Foto");
     private final TableRowSorter<DefaultTableModel> ordenador;
     private final List<Colaborador> lista = new ArrayList<>();
+    private final boolean somenteLeitura = Permissoes.somenteLeitura();
+    private final boolean modoHistorico;
 
     public ColaboradoresPanel(Runnable voltar) {
-        super("Colaboradores", "Cadastro, importação por planilha e histórico de treinamentos.", voltar);
+        this(voltar, false);
+    }
+
+    public ColaboradoresPanel(Runnable voltar, boolean modoHistorico) {
+        super(modoHistorico ? "Histórico do colaborador" : "Colaboradores",
+                modoHistorico
+                        ? "Consulte os treinamentos realizados por colaborador."
+                        : "Cadastro, importação por planilha e histórico de treinamentos.",
+                voltar);
+        this.modoHistorico = modoHistorico;
         ordenador = new TableRowSorter<>((DefaultTableModel) tabela.getModel());
         tabela.setRowSorter(ordenador);
         tabela.getColumnModel().getColumn(0).setPreferredWidth(240);
@@ -65,9 +80,14 @@ public class ColaboradoresPanel extends TelaBase {
         tabela.getColumnModel().getColumn(3).setPreferredWidth(120);
         tabela.getColumnModel().getColumn(4).setPreferredWidth(90);
         tabela.getColumnModel().getColumn(5).setPreferredWidth(80);
-        acao(Ui.secundario("Modelo de planilha")).addActionListener(e -> gerarModelo());
-        acao(Ui.secundario("Importar")).addActionListener(e -> importar());
-        acao(Ui.primario("+ Novo colaborador")).addActionListener(e -> editar(null));
+        tabela.getColumnModel().getColumn(6).setPreferredWidth(60);
+        tabela.getColumnModel().getColumn(6).setMaxWidth(70);
+        tabela.getColumnModel().getColumn(6).setCellRenderer(new RenderizadorFoto());
+        if (!somenteLeitura && !modoHistorico) {
+            acao(Ui.secundario("Modelo de planilha")).addActionListener(e -> gerarModelo());
+            acao(Ui.secundario("Importar")).addActionListener(e -> importar());
+            acao(Ui.primario("+ Novo colaborador")).addActionListener(e -> editar(null));
+        }
     }
 
     @Override
@@ -93,29 +113,39 @@ public class ColaboradoresPanel extends TelaBase {
                 filtrar();
             }
         });
-        JLabel dica = Ui.subtitulo("Duplo clique para editar. Importe .xlsx ou .csv com cabeçalho.");
+        JLabel dica = Ui.subtitulo(modoHistorico
+                ? "Duplo clique para ver os treinamentos do colaborador."
+                : "Duplo clique para editar. Importe .xlsx ou .csv com cabeçalho.");
         topo.add(dica, BorderLayout.EAST);
         cartao.add(topo, BorderLayout.NORTH);
         cartao.add(Ui.rolagem(tabela), BorderLayout.CENTER);
 
         JPanel rodape = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         rodape.setOpaque(false);
-        JButton btnEditar = Ui.secundario("Editar");
-        btnEditar.addActionListener(e -> editar(selecionado()));
+        if (!somenteLeitura && !modoHistorico) {
+            JButton btnEditar = Ui.secundario("Editar");
+            btnEditar.addActionListener(e -> editar(selecionado()));
+            rodape.add(btnEditar);
+        }
         JButton btnHist = Ui.secundario("Histórico");
         btnHist.addActionListener(e -> historico(selecionado()));
-        JButton btnExcluir = Ui.perigo("Excluir");
-        btnExcluir.addActionListener(e -> excluir(selecionado()));
-        rodape.add(btnEditar);
         rodape.add(btnHist);
-        rodape.add(btnExcluir);
+        if (!somenteLeitura && !modoHistorico) {
+            JButton btnExcluir = Ui.perigo("Excluir");
+            btnExcluir.addActionListener(e -> excluir(selecionado()));
+            rodape.add(btnExcluir);
+        }
         cartao.add(rodape, BorderLayout.SOUTH);
 
         tabela.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) {
-                    editar(selecionado());
+                    if (somenteLeitura || modoHistorico) {
+                        historico(selecionado());
+                    } else {
+                        editar(selecionado());
+                    }
                 }
             }
         });
@@ -135,7 +165,8 @@ public class ColaboradoresPanel extends TelaBase {
                     c.getCargo() == null ? "" : c.getCargo(),
                     c.getSetorNome() == null ? "" : c.getSetorNome(),
                     c.getMatricula() == null ? "" : c.getMatricula(),
-                    c.isAtivo() ? "Ativo" : "Inativo"});
+                    c.isAtivo() ? "Ativo" : "Inativo",
+                    temFoto(c) ? "Sim" : "Não"});
             }
         } catch (RuntimeException e) {
             Ui.erro(this, e);
@@ -537,7 +568,30 @@ public class ColaboradoresPanel extends TelaBase {
         }
     }
 
+    private boolean temFoto(Colaborador c) {
+        File f = Fotos.arquivo(c.getFoto());
+        return f != null && f.isFile();
+    }
+
     private String nz(String valor) {
         return valor == null ? "" : valor;
+    }
+
+    private static class RenderizadorFoto extends DefaultTableCellRenderer {
+
+        @Override
+        public Component getTableCellRendererComponent(JTable tabela, Object valor,
+                boolean selecionado, boolean foco, int linha, int coluna) {
+            JLabel l = (JLabel) super.getTableCellRendererComponent(tabela, valor,
+                    selecionado, foco, linha, coluna);
+            boolean sim = "Sim".equals(valor);
+            l.setHorizontalAlignment(SwingConstants.CENTER);
+            l.setFont(Ui.fonte(11, Font.BOLD));
+            l.setForeground(selecionado ? tabela.getSelectionForeground()
+                    : (sim ? Ui.VERDE : Ui.SUAVE));
+            l.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 6));
+            l.setToolTipText(sim ? "Foto cadastrada" : "Sem foto para o crachá");
+            return l;
+        }
     }
 }

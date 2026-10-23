@@ -154,6 +154,22 @@ public class InstrutorDAO {
         }
     }
 
+    public int habilitacoesVencidas() {
+        String sql = "SELECT COUNT(*) FROM instrutor_habilitacao h "
+                + "JOIN instrutor i ON i.id = h.instrutor_id "
+                + "WHERE i.ativo = 1 AND h.validade IS NOT NULL AND h.validade <> '' "
+                + "AND h.validade < ?";
+        try (Connection con = Conexao.abrir();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, java.time.LocalDate.now().toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Erro ao contar habilitações vencidas", e);
+        }
+    }
+
     public void excluir(int id) {
         try (Connection con = Conexao.abrir();
              PreparedStatement ps = con.prepareStatement("DELETE FROM instrutor WHERE id = ?")) {

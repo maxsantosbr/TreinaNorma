@@ -24,6 +24,43 @@ public class ParametroDAO {
         return mapa;
     }
 
+    public String valor(String chave, String padrao) {
+        String sql = "SELECT valor FROM parametro WHERE chave = ?";
+        try (Connection con = Conexao.abrir();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, chave);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String valor = rs.getString(1);
+                    return valor == null || valor.isBlank() ? padrao : valor.trim();
+                }
+            }
+        } catch (SQLException e) {
+            return padrao;
+        }
+        return padrao;
+    }
+
+    public int inteiro(String chave, int padrao) {
+        try {
+            return Integer.parseInt(valor(chave, String.valueOf(padrao)));
+        } catch (NumberFormatException e) {
+            return padrao;
+        }
+    }
+
+    public boolean sim(String chave, boolean padrao) {
+        String valor = valor(chave, padrao ? "sim" : "nao").toLowerCase();
+        if (valor.equals("sim") || valor.equals("s") || valor.equals("true") || valor.equals("1")) {
+            return true;
+        }
+        if (valor.equals("nao") || valor.equals("não") || valor.equals("n")
+                || valor.equals("false") || valor.equals("0")) {
+            return false;
+        }
+        return padrao;
+    }
+
     public void salvar(Map<String, String> mapa) {
         try (Connection con = Conexao.abrir()) {
             con.setAutoCommit(false);

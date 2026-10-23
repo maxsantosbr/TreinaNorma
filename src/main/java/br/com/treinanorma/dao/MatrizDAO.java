@@ -79,6 +79,17 @@ public class MatrizDAO {
         }
     }
 
+    public int semChFixa() {
+        try (Connection con = Conexao.abrir();
+             Statement st = con.createStatement();
+             ResultSet rs = st.executeQuery(
+                     "SELECT COUNT(*) FROM matriz_treinamento WHERE ch_minima IS NULL OR ch_minima <= 0")) {
+            return rs.next() ? rs.getInt(1) : 0;
+        } catch (SQLException e) {
+            throw new IllegalStateException("Erro ao contar matriz sem CH", e);
+        }
+    }
+
     public int totalItens() {
         try (Connection con = Conexao.abrir();
              Statement st = con.createStatement();

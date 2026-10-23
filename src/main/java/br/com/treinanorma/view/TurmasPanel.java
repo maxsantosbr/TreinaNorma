@@ -22,6 +22,7 @@ import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
+import java.awt.event.ActionEvent;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.awt.event.MouseAdapter;
@@ -37,20 +38,21 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
+import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
-import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
-import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.RowFilter;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -620,90 +622,226 @@ public class TurmasPanel extends TelaBase {
    }
 
    private void participantes(Turma turma) {
-      if (turma != null) {
-         try {
-            List<Colaborador> todos = this.colaboradores.ativos();
-            List<Participante> atuais = this.dao.participantes(turma.getId());
-            DefaultListModel<String> modelo = new DefaultListModel<>();
-            List<Colaborador> ordem = new ArrayList<>();
+      if (turma == null) {
+         return;
+      }
+      if ("CONCLUIDA".equals(turma.getStatus())) {
+         Ui.aviso(this, "Turma concluída: os participantes não podem mais ser alterados.");
+         return;
+      }
+      try {
+         List<Colaborador> todos = this.colaboradores.ativos();
+         List<Participante> atuais = this.dao.participantes(turma.getId());
+         List<Colaborador> ordem = new ArrayList<>();
+         Set<Integer> marcados = new HashSet<>();
 
-            for (Colaborador c : todos) {
-               if (turma.getInstrutorId() != null) {
-                  Instrutor i = this.instrutores.porId(turma.getInstrutorId());
-                  if (i != null && i.getCpf() != null && i.getCpf().equals(c.getCpf())) {
-                     continue;
-                  }
-               }
-
-               ordem.add(c);
-               modelo.addElement(c.getNome() + "  -  " + c.getCpf() + (c.getCargo() == null ? "" : "  -  " + c.getCargo()));
-            }
-
-            JList<String> listaColab = new JList<>(modelo);
-            listaColab.setFont(Ui.fonte(12, 0));
-            listaColab.setSelectionMode(2);
-            List<Integer> selecionados = new ArrayList<>();
-
-            for (Participante p : atuais) {
-               for (int i = 0; i < ordem.size(); i++) {
-                  if (ordem.get(i).getId() == p.getColaboradorId()) {
-                     selecionados.add(i);
-                  }
-               }
-            }
-
-            int[] indices = selecionados.stream().mapToInt(Integer::intValue).toArray();
-            listaColab.setSelectedIndices(indices);
-            JDialog d = Ui.dialogo(this, "Participantes - " + turma.getCodigo(), 620, 520);
-            JPanel corpo = new JPanel(new BorderLayout(0, 8));
-            corpo.setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
-            corpo.add(Ui.subtitulo("Selecione os colaboradores (Ctrl para vários). Somente presentes e aprovados geram certificado."), "North");
-            JScrollPane rolagem = new JScrollPane(listaColab);
-            corpo.add(rolagem, "Center");
-            JButton salvar = Ui.primario("Salvar seleção");
-            JButton cancelar = Ui.secundario("Cancelar");
-            JPanel rodape = new JPanel(new FlowLayout(2, 8, 8));
-            rodape.add(cancelar);
-            rodape.add(salvar);
-            salvar.addActionListener(ex -> {
-               try {
-                  List<Integer> escolhidos = new ArrayList<>();
-
-                  for (int ix : listaColab.getSelectedIndices()) {
-                     escolhidos.add(ordem.get(ix).getId());
-                  }
-
-                  List<Integer> atuaisIds = new ArrayList<>();
-
-                  for (Participante p : atuais) {
-                     atuaisIds.add(p.getColaboradorId());
-                  }
-
-                  List<Integer> adicionar = new ArrayList<>(escolhidos);
-                  adicionar.removeAll(atuaisIds);
-                  List<Integer> remover = new ArrayList<>(atuaisIds);
-                  remover.removeAll(escolhidos);
-                  if (!adicionar.isEmpty()) {
-                     this.dao.adicionarParticipantes(turma.getId(), adicionar);
-                  }
-
-                  for (Integer id : remover) {
-                     this.dao.removerParticipante(turma.getId(), id);
-                  }
-
-                  d.dispose();
-                  this.carregar();
-               } catch (RuntimeException var13x) {
-                  Ui.erro(d, var13x);
-               }
-            });
-            cancelar.addActionListener(ex -> d.dispose());
-            d.add(corpo, "Center");
-            d.add(rodape, "South");
-            d.setVisible(true);
-         } catch (RuntimeException var15) {
-            Ui.erro(this, var15);
+         for (Participante p : atuais) {
+            marcados.add(p.getColaboradorId());
          }
+         for (Colaborador c : todos) {
+            if (turma.getInstrutorId() != null) {
+               Instrutor i = this.instrutores.porId(turma.getInstrutorId());
+               if (i != null && i.getCpf() != null && i.getCpf().equals(c.getCpf())) {
+                  continue;
+               }
+            }
+            ordem.add(c);
+         }
+         if (ordem.isEmpty()) {
+            Ui.aviso(this, "Nenhum colaborador ativo disponível para participar.");
+            return;
+         }
+
+         DefaultTableModel modelo = new DefaultTableModel(
+                 new Object[]{"", "Nome", "CPF", "Cargo", "Setor"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+               return false;
+            }
+
+            @Override
+            public Class<?> getColumnClass(int column) {
+               return column == 0 ? Boolean.class : String.class;
+            }
+         };
+         for (Colaborador c : ordem) {
+            modelo.addRow(new Object[]{marcados.contains(c.getId()), c.getNome(),
+                Cpf.formatar(c.getCpf()),
+                c.getCargo() == null ? "" : c.getCargo(),
+                c.getSetorNome() == null ? "" : c.getSetorNome()});
+         }
+
+         JTable tabela = Ui.tabela("", "Nome", "CPF", "Cargo", "Setor");
+         tabela.setModel(modelo);
+         tabela.getColumnModel().getColumn(0).setMaxWidth(44);
+         tabela.getColumnModel().getColumn(0).setPreferredWidth(44);
+         tabela.getColumnModel().getColumn(0).setResizable(false);
+         tabela.getColumnModel().getColumn(1).setPreferredWidth(250);
+         tabela.getColumnModel().getColumn(2).setPreferredWidth(120);
+         tabela.getColumnModel().getColumn(3).setPreferredWidth(150);
+         tabela.getColumnModel().getColumn(4).setPreferredWidth(140);
+         TableRowSorter<DefaultTableModel> ordenador = new TableRowSorter<>(modelo);
+         tabela.setRowSorter(ordenador);
+
+         JTextField busca = Ui.campo("Buscar por nome, CPF, cargo ou setor...");
+         busca.getDocument().addDocumentListener(new DocumentListener() {
+            private void aplicar() {
+               String termo = busca.getText().trim().toLowerCase();
+               if (termo.isEmpty()) {
+                  ordenador.setRowFilter(null);
+                  return;
+               }
+               ordenador.setRowFilter(new RowFilter<DefaultTableModel, Integer>() {
+                  @Override
+                  public boolean include(Entry<? extends DefaultTableModel, ? extends Integer> e) {
+                     for (int col = 1; col <= 4; col++) {
+                        Object valor = e.getValue(col);
+                        if (valor != null && valor.toString().toLowerCase().contains(termo)) {
+                           return true;
+                        }
+                     }
+                     return false;
+                  }
+               });
+            }
+
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+               aplicar();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+               aplicar();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+               aplicar();
+            }
+         });
+
+         JLabel contador = new JLabel();
+         Runnable atualizarContador = () -> {
+            int total = 0;
+            for (int i = 0; i < modelo.getRowCount(); i++) {
+               if (Boolean.TRUE.equals(modelo.getValueAt(i, 0))) {
+                  total++;
+               }
+            }
+            contador.setText(total + " de " + modelo.getRowCount() + " selecionado(s)");
+         };
+         modelo.addTableModelListener(e -> atualizarContador.run());
+
+         tabela.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+               int linha = tabela.rowAtPoint(e.getPoint());
+               int coluna = tabela.columnAtPoint(e.getPoint());
+               if (linha >= 0 && coluna == 0) {
+                  int m = tabela.convertRowIndexToModel(linha);
+                  modelo.setValueAt(!Boolean.TRUE.equals(modelo.getValueAt(m, 0)), m, 0);
+               }
+            }
+         });
+         tabela.getInputMap(JComponent.WHEN_FOCUSED)
+                 .put(KeyStroke.getKeyStroke("SPACE"), "alternar");
+         tabela.getActionMap().put("alternar", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+               for (int v : tabela.getSelectedRows()) {
+                  int m = tabela.convertRowIndexToModel(v);
+                  modelo.setValueAt(!Boolean.TRUE.equals(modelo.getValueAt(m, 0)), m, 0);
+               }
+            }
+         });
+
+         JButton marcarTodos = Ui.secundario("Marcar todos");
+         marcarTodos.addActionListener(e -> {
+            for (int v = 0; v < tabela.getRowCount(); v++) {
+               modelo.setValueAt(Boolean.TRUE, tabela.convertRowIndexToModel(v), 0);
+            }
+         });
+         JButton desmarcar = Ui.secundario("Desmarcar todos");
+         desmarcar.addActionListener(e -> {
+            for (int v = 0; v < tabela.getRowCount(); v++) {
+               modelo.setValueAt(Boolean.FALSE, tabela.convertRowIndexToModel(v), 0);
+            }
+         });
+
+         JDialog d = Ui.dialogo(this, "Participantes - " + turma.getCodigo(), 780, 560);
+         JPanel topo = new JPanel(new BorderLayout(0, 8));
+         topo.setOpaque(false);
+         topo.add(busca, BorderLayout.NORTH);
+         JPanel linhaAcoes = new JPanel(new BorderLayout());
+         linhaAcoes.setOpaque(false);
+         JPanel botoes = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+         botoes.setOpaque(false);
+         botoes.add(marcarTodos);
+         botoes.add(desmarcar);
+         linhaAcoes.add(botoes, BorderLayout.WEST);
+         linhaAcoes.add(contador, BorderLayout.EAST);
+         topo.add(linhaAcoes, BorderLayout.CENTER);
+         topo.add(Ui.subtitulo("Marque quem participará da turma. A presença é lançada depois, na Chamada."),
+                 BorderLayout.SOUTH);
+
+         JPanel corpo = new JPanel(new BorderLayout(0, 10));
+         corpo.setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
+         corpo.add(topo, BorderLayout.NORTH);
+         corpo.add(Ui.rolagem(tabela), BorderLayout.CENTER);
+
+         JButton salvar = Ui.primario("Salvar seleção");
+         JButton cancelar = Ui.secundario("Cancelar");
+         JPanel rodape = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
+         rodape.add(cancelar);
+         rodape.add(salvar);
+         d.getRootPane().setDefaultButton(salvar);
+
+         salvar.addActionListener(e -> {
+            try {
+               if (tabela.isEditing()) {
+                  tabela.getCellEditor().stopCellEditing();
+               }
+               List<Integer> escolhidos = new ArrayList<>();
+               for (int i = 0; i < modelo.getRowCount(); i++) {
+                  if (Boolean.TRUE.equals(modelo.getValueAt(i, 0))) {
+                     escolhidos.add(ordem.get(i).getId());
+                  }
+               }
+               List<Integer> atuaisIds = new ArrayList<>();
+               for (Participante p : atuais) {
+                  atuaisIds.add(p.getColaboradorId());
+               }
+               if (escolhidos.isEmpty() && !atuaisIds.isEmpty()
+                       && !Ui.confirma(d, "Nenhum colaborador marcado.\n\nRemover todos os participantes da turma?")) {
+                  return;
+               }
+
+               List<Integer> adicionar = new ArrayList<>(escolhidos);
+               adicionar.removeAll(atuaisIds);
+               List<Integer> remover = new ArrayList<>(atuaisIds);
+               remover.removeAll(escolhidos);
+               if (!adicionar.isEmpty()) {
+                  this.dao.adicionarParticipantes(turma.getId(), adicionar);
+               }
+               for (Integer id : remover) {
+                  this.dao.removerParticipante(turma.getId(), id);
+               }
+
+               d.dispose();
+               this.carregar();
+            } catch (RuntimeException ex) {
+               Ui.erro(d, ex);
+            }
+         });
+         cancelar.addActionListener(e -> d.dispose());
+         atualizarContador.run();
+
+         d.add(corpo, BorderLayout.CENTER);
+         d.add(rodape, BorderLayout.SOUTH);
+         d.setVisible(true);
+      } catch (RuntimeException e) {
+         Ui.erro(this, e);
       }
    }
 
@@ -752,6 +890,7 @@ public class TurmasPanel extends TelaBase {
                }
 
                boolean[] carregando = new boolean[]{false};
+               int[] diaAnterior = new int[]{0};
                Runnable carregarPresencas = () -> {
                   int indice = comboDia.getSelectedIndex();
                   if (indice >= 0 && indice < encontros.size()) {
@@ -766,8 +905,7 @@ public class TurmasPanel extends TelaBase {
                      }
                   }
                };
-               Runnable coletar = () -> {
-                  int indice = comboDia.getSelectedIndex();
+               Consumer<Integer> coletar = indice -> {
                   if (indice >= 0 && indice < encontros.size()) {
                      Set<Integer> marcados = new HashSet<>();
 
@@ -782,7 +920,9 @@ public class TurmasPanel extends TelaBase {
                };
                comboDia.addActionListener(ex -> {
                   if (!carregando[0]) {
-                     coletar.run();
+                     int novo = comboDia.getSelectedIndex();
+                     coletar.accept(diaAnterior[0]);
+                     diaAnterior[0] = novo;
                      carregarPresencas.run();
                   }
                });
@@ -790,6 +930,7 @@ public class TurmasPanel extends TelaBase {
                   carregando[0] = true;
                   comboDia.setSelectedIndex(0);
                   carregando[0] = false;
+                  diaAnterior[0] = 0;
                   carregarPresencas.run();
                }
 
@@ -851,8 +992,8 @@ public class TurmasPanel extends TelaBase {
                         }
 
                         this.dao.salvarChamada(participantes);
-                     } else {
-                        coletar.run();
+                      } else {
+                         coletar.accept(comboDia.getSelectedIndex());
 
                         for (Encontro en : encontros) {
                            Set<Integer> doDia = presencas.getOrDefault(en.getId(), Set.of());

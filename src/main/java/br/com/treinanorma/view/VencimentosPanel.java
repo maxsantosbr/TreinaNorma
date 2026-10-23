@@ -21,8 +21,10 @@ import javax.swing.table.TableRowSorter;
 public class VencimentosPanel extends TelaBase {
 
     private final RegistroDAO dao = new RegistroDAO();
+    private final int diasAlerta = new br.com.treinanorma.dao.ParametroDAO()
+            .inteiro("alerta_vencimento_dias", 30);
     private final JTextField busca = Ui.campo("Filtrar por colaborador, NR ou treinamento...");
-    private final JComboBox<String> janela = Ui.combo("Vencidos e próximos 30 dias",
+    private final JComboBox<String> janela = Ui.combo("Vencidos e próximos " + diasAlerta + " dias",
             "Vencidos", "Próximos 60 dias", "Próximos 90 dias", "Todos os registros");
     private final JTable tabela = Ui.tabela("Colaborador", "NR / Treinamento", "Realizado",
             "Validade", "Dias restantes", "Situação");
@@ -30,7 +32,9 @@ public class VencimentosPanel extends TelaBase {
     private final List<RegistroTreinamento> lista = new ArrayList<>();
 
     public VencimentosPanel(Runnable voltar) {
-        super("Vencimentos", "Priorize reciclagens: vencidos primeiro, depois o que vence em 30 dias.", voltar);
+        super("Vencimentos", "Priorize reciclagens: vencidos primeiro, depois o que vence em "
+                + new br.com.treinanorma.dao.ParametroDAO()
+                        .inteiro("alerta_vencimento_dias", 30) + " dias.", voltar);
         ordenador = new TableRowSorter<>((DefaultTableModel) tabela.getModel());
         tabela.setRowSorter(ordenador);
         tabela.getColumnModel().getColumn(1).setPreferredWidth(260);
@@ -85,7 +89,7 @@ public class VencimentosPanel extends TelaBase {
                     dias = 3650;
                     break;
                 default:
-                    dias = 30;
+                    dias = diasAlerta;
             }
             boolean somenteVencidos = janela.getSelectedIndex() == 1;
             lista.clear();
@@ -122,7 +126,7 @@ public class VencimentosPanel extends TelaBase {
         if (dias < 0) {
             return "Vencido";
         }
-        if (dias <= 30) {
+        if (dias <= diasAlerta) {
             return "Vence em " + dias + " d";
         }
         return "Válido";
