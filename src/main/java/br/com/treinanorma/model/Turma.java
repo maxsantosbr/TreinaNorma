@@ -11,6 +11,7 @@ public class Turma {
     private String norma;
     private String treinamento;
     private LocalDate data;
+    private LocalDate dataFim;
     private String horaInicio;
     private String horaFim;
     private String local;
@@ -42,6 +43,8 @@ public class Turma {
     public void setTreinamento(String v) { this.treinamento = v; }
     public LocalDate getData() { return data; }
     public void setData(LocalDate v) { this.data = v; }
+    public LocalDate getDataFim() { return dataFim; }
+    public void setDataFim(LocalDate v) { this.dataFim = v; }
     public String getHoraInicio() { return horaInicio; }
     public void setHoraInicio(String v) { this.horaInicio = v; }
     public String getHoraFim() { return horaFim; }

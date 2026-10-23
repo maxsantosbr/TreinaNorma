@@ -252,6 +252,7 @@ public class RegistroDAO {
         r.setNorma(rs.getString("norma"));
         r.setTreinamento(rs.getString("treinamento"));
         r.setData(Datas.ler(rs.getString("data")));
+        r.setDataFim(Datas.ler(rs.getString("data_fim")));
         r.setCh(rs.getDouble("ch"));
         int instrutor = rs.getInt("instrutor_id");
         r.setInstrutorId(rs.wasNull() ? null : instrutor);

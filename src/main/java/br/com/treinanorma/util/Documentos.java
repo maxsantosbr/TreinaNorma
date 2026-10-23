@@ -4,10 +4,12 @@ import br.com.treinanorma.dao.ColaboradorDAO;
 import br.com.treinanorma.dao.RegistroDAO;
 import br.com.treinanorma.model.Colaborador;
 import br.com.treinanorma.model.Empresa;
+import br.com.treinanorma.model.Encontro;
 import br.com.treinanorma.model.Instrutor;
 import br.com.treinanorma.model.Participante;
 import br.com.treinanorma.model.RegistroTreinamento;
 import br.com.treinanorma.model.Turma;
+import com.lowagie.text.Chunk;
 import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
 import com.lowagie.text.Element;
@@ -21,6 +23,7 @@ import com.lowagie.text.Utilities;
 import com.lowagie.text.pdf.BaseFont;
 import com.lowagie.text.pdf.PdfContentByte;
 import com.lowagie.text.pdf.PdfPCell;
+import com.lowagie.text.pdf.PdfPCellEvent;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfPageEventHelper;
 import com.lowagie.text.pdf.PdfWriter;
@@ -31,6 +34,8 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public final class Documentos {
 
@@ -74,6 +79,16 @@ public final class Documentos {
 
     private static String data(LocalDate valor) {
         return valor == null ? "" : valor.format(Datas.BR);
+    }
+
+    private static String periodo(RegistroTreinamento registro) {
+        if (registro.getData() == null) {
+            return "realizado em data a definir";
+        }
+        if (registro.getDataFim() != null && !registro.getDataFim().equals(registro.getData())) {
+            return "realizado de " + data(registro.getData()) + " a " + data(registro.getDataFim());
+        }
+        return "realizado em " + data(registro.getData());
     }
 
     public static File ata(Turma turma, Empresa empresa, Instrutor instrutor,
@@ -133,6 +148,205 @@ public final class Documentos {
                 + "e conteúdo programático registrados.", fonte(8, Font.NORMAL, CINZA));
         declaracao.setSpacingBefore(10);
         declaracao.setSpacingAfter(4);
+        doc.add(declaracao);
+
+        PdfPTable assinaturas = new PdfPTable(2);
+        assinaturas.setWidthPercentage(100);
+        assinaturas.setSpacingBefore(22);
+        assinaturas.addCell(linhaAssinatura(
+                instrutor == null ? turma.getInstrutorNome() : instrutor.getNome(),
+                instrutor == null ? "Instrutor" : texto(instrutor.getFormacao())
+                + (instrutor.getRegistro() == null ? "" : " - Registro " + instrutor.getRegistro())));
+        assinaturas.addCell(linhaAssinatura(
+                empresa == null ? "" : texto(empresa.getResponsavelNome()),
+                empresa == null ? "Responsável técnico"
+                : texto(empresa.getResponsavelProfissao())
+                + (empresa.getResponsavelRegistro() == null ? ""
+                : " - Registro " + empresa.getResponsavelRegistro())));
+        doc.add(assinaturas);
+
+        doc.close();
+        return destino;
+    }
+
+    public static File ataDia(Turma turma, Empresa empresa, Instrutor instrutor, Encontro encontro,
+            int indice, int totalDias, List<Participante> presentes)
+            throws IOException, DocumentException {
+        String sufixo = totalDias > 1 ? String.format("-dia-%02d", indice + 1) : "";
+        File destino = new File(pasta(), "ata-" + turma.getCodigo() + sufixo + ".pdf");
+        Document doc = new Document(PageSize.A4, 40, 40, 40, 46);
+        PdfWriter escritor = PdfWriter.getInstance(doc, new FileOutputStream(destino));
+        escritor.setPageEvent(new Rodape("Ata " + turma.getCodigo()
+                + (totalDias > 1 ? " - dia " + (indice + 1) + " de " + totalDias : "")
+                + " - " + (turma.getHashAta() == null ? "rascunho"
+                : "hash " + turma.getHashAta().substring(0, 12))));
+        doc.open();
+
+        cabecalho(doc, empresa, "ATA DE PRESENÇA", "Turma " + turma.getCodigo()
+                + (totalDias > 1 ? "  |  Dia " + (indice + 1) + " de " + totalDias : ""));
+
+        PdfPTable dados = new PdfPTable(new float[]{1.1f, 2.4f, 1.1f, 2.4f});
+        dados.setWidthPercentage(100);
+        dados.setSpacingBefore(14);
+        dados.setSpacingAfter(8);
+        par(dados, "Norma", turma.getNorma(), true);
+        par(dados, "Treinamento", turma.getTreinamento(), false);
+        par(dados, "Data", data(encontro.getData()), true);
+        par(dados, "Horário", texto(encontro.getHoraInicio()) + " às "
+                + texto(encontro.getHoraFim()), false);
+        par(dados, "CH do dia", numero(encontro.getCh()) + " h", true);
+        par(dados, "Modalidade", encontro.modalidade(), false);
+        par(dados, "Local", texto(turma.getLocal()), true);
+        par(dados, "Instrutor", texto(turma.getInstrutorNome()), false);
+        par(dados, "Registro", instrutor == null ? "" : texto(instrutor.getRegistro()), true);
+        par(dados, "Presentes", String.valueOf(presentes.size()), false);
+        doc.add(dados);
+
+        if (encontro.getConteudo() != null && !encontro.getConteudo().isBlank()) {
+            doc.add(tituloSecao("CONTEÚDO MINISTRADO NESTE DIA"));
+            PdfPTable caixa = new PdfPTable(1);
+            caixa.setWidthPercentage(100);
+            PdfPCell c = new PdfPCell(new Phrase(encontro.getConteudo(),
+                    fonte(9, Font.NORMAL)));
+            c.setPadding(6);
+            c.setBorderColor(BORDA);
+            c.setMinimumHeight(40);
+            caixa.addCell(c);
+            doc.add(caixa);
+        }
+
+        doc.add(tituloSecao("PARTICIPANTES PRESENTES"));
+        if (presentes.isEmpty()) {
+            doc.add(new Paragraph("Nenhum participante presente neste dia.",
+                    fonte(9, Font.NORMAL, CINZA)));
+        } else {
+            PdfPTable tabela = new PdfPTable(new float[]{0.45f, 2.7f, 1.35f, 1.6f, 1.2f, 1.9f});
+            tabela.setWidthPercentage(100);
+            cabecalhoTabela(tabela, "#", "Nome do participante", "CPF", "Função",
+                    "Setor", "Assinatura");
+            int i = 1;
+            for (Participante p : presentes) {
+                tabela.addCell(celula(String.valueOf(i++), 8, Element.ALIGN_CENTER, 16));
+                tabela.addCell(celula(p.getNome(), 8, Element.ALIGN_LEFT, 16));
+                tabela.addCell(celula(Cpf.formatar(p.getCpf()), 8, Element.ALIGN_CENTER, 16));
+                tabela.addCell(celula(texto(p.getCargo()), 8, Element.ALIGN_LEFT, 16));
+                tabela.addCell(celula(texto(p.getSetor()), 8, Element.ALIGN_LEFT, 16));
+                tabela.addCell(celula("", 8, Element.ALIGN_LEFT, 16));
+            }
+            doc.add(tabela);
+        }
+
+        Paragraph declaracao = new Paragraph(
+                "Declaramos, para os devidos fins, que os participantes acima relacionados "
+                + "compareceram ao encontro de " + data(encontro.getData())
+                + ", conforme conteúdo e carga horária registrados nesta ata.",
+                fonte(8, Font.NORMAL, CINZA));
+        declaracao.setSpacingBefore(10);
+        declaracao.setSpacingAfter(4);
+        doc.add(declaracao);
+
+        PdfPTable assinaturas = new PdfPTable(2);
+        assinaturas.setWidthPercentage(100);
+        assinaturas.setSpacingBefore(22);
+        assinaturas.addCell(linhaAssinatura(
+                instrutor == null ? turma.getInstrutorNome() : instrutor.getNome(),
+                instrutor == null ? "Instrutor" : texto(instrutor.getFormacao())
+                + (instrutor.getRegistro() == null ? "" : " - Registro " + instrutor.getRegistro())));
+        assinaturas.addCell(linhaAssinatura(
+                empresa == null ? "" : texto(empresa.getResponsavelNome()),
+                empresa == null ? "Responsável técnico"
+                : texto(empresa.getResponsavelProfissao())
+                + (empresa.getResponsavelRegistro() == null ? ""
+                : " - Registro " + empresa.getResponsavelRegistro())));
+        doc.add(assinaturas);
+
+        doc.close();
+        return destino;
+    }
+
+    public static File ataConsolidada(Turma turma, Empresa empresa, Instrutor instrutor,
+            List<Encontro> encontros, List<Participante> participantes,
+            Map<Integer, Set<Integer>> presencas) throws IOException, DocumentException {
+        File destino = new File(pasta(), "ata-" + turma.getCodigo() + "-consolidada.pdf");
+        Document doc = new Document(PageSize.A4, 40, 40, 40, 46);
+        PdfWriter escritor = PdfWriter.getInstance(doc, new FileOutputStream(destino));
+        escritor.setPageEvent(new Rodape("Ata consolidada " + turma.getCodigo()
+                + " - " + (turma.getHashAta() == null ? "rascunho"
+                : "hash " + turma.getHashAta().substring(0, 12))));
+        doc.open();
+
+        cabecalho(doc, empresa, "ATA CONSOLIDADA", "Turma " + turma.getCodigo());
+
+        double total = 0;
+        double pratica = 0;
+        for (Encontro e : encontros) {
+            total += e.getCh();
+            if (e.isPratica()) {
+                pratica += e.getCh();
+            }
+        }
+        LocalDate inicio = encontros.isEmpty() ? turma.getData() : encontros.get(0).getData();
+        LocalDate fim = encontros.isEmpty() ? turma.getData()
+                : encontros.get(encontros.size() - 1).getData();
+        Paragraph resumo = new Paragraph(
+                "Período: " + data(inicio) + " a " + data(fim)
+                + "  |  " + encontros.size() + " encontro(s)"
+                + "  |  CH total: " + numero(total) + " h"
+                + "  |  Prática: " + numero(pratica) + " h"
+                + (total > 0 ? " (" + Math.round(pratica / total * 100) + "%)" : ""),
+                fonte(8.5f, Font.NORMAL, CINZA));
+        resumo.setSpacingBefore(12);
+        resumo.setSpacingAfter(8);
+        doc.add(resumo);
+
+        doc.add(tituloSecao("ENCONTROS REALIZADOS"));
+        PdfPTable dias = new PdfPTable(new float[]{0.5f, 1.0f, 0.7f, 1.25f, 3.7f});
+        dias.setWidthPercentage(100);
+        cabecalhoTabela(dias, "#", "Data", "CH", "Tipo", "Conteúdo");
+        int i = 1;
+        for (Encontro e : encontros) {
+            dias.addCell(celula(String.valueOf(i++), 8, Element.ALIGN_CENTER, 14));
+            dias.addCell(celula(data(e.getData()), 8, Element.ALIGN_CENTER, 14));
+            dias.addCell(celula(numero(e.getCh()) + " h", 8, Element.ALIGN_CENTER, 14));
+            dias.addCell(celula(e.isPratica() ? "Prática" : "Teórica", 8,
+                    Element.ALIGN_CENTER, 14));
+            dias.addCell(celula(texto(e.getConteudo()), 7.5f, Element.ALIGN_LEFT, 14));
+        }
+        doc.add(dias);
+
+        doc.add(tituloSecao("RESUMO DE PRESENÇA E CARGA HORÁRIA"));
+        PdfPTable tabela = new PdfPTable(new float[]{2.5f, 1.2f, 1.25f, 1.0f, 0.9f, 1.0f});
+        tabela.setWidthPercentage(100);
+        cabecalhoTabela(tabela, "Participante", "CPF", "Função", "Presenças", "CH", "Situação");
+        for (Participante p : participantes) {
+            int diasPresentes = 0;
+            double horas = 0;
+            for (Encontro e : encontros) {
+                Set<Integer> doDia = presencas.get(e.getId());
+                if (doDia != null && doDia.contains(p.getId())) {
+                    diasPresentes++;
+                    horas += e.getCh();
+                }
+            }
+            boolean apto = encontros.isEmpty()
+                    ? p.isPresente() && !Boolean.FALSE.equals(p.getAprovado())
+                    : diasPresentes == encontros.size() && !Boolean.FALSE.equals(p.getAprovado());
+            tabela.addCell(celula(p.getNome(), 8, Element.ALIGN_LEFT, 16));
+            tabela.addCell(celula(Cpf.formatar(p.getCpf()), 8, Element.ALIGN_CENTER, 16));
+            tabela.addCell(celula(texto(p.getCargo()), 8, Element.ALIGN_LEFT, 16));
+            tabela.addCell(celula(diasPresentes + "/" + encontros.size(), 8,
+                    Element.ALIGN_CENTER, 16));
+            tabela.addCell(celula(numero(encontros.isEmpty() ? turma.getChTotal() : horas)
+                    + " h", 8, Element.ALIGN_CENTER, 16));
+            tabela.addCell(celula(apto ? "Apto" : "Repetir", 8, Element.ALIGN_CENTER, 16));
+        }
+        doc.add(tabela);
+
+        Paragraph declaracao = new Paragraph(
+                "A situação \"Repetir\" indica ausência em pelo menos um encontro ou "
+                + "reprovação na avaliação; nesse caso o participante deve refazer o treinamento.",
+                fonte(7.5f, Font.NORMAL, CINZA));
+        declaracao.setSpacingBefore(8);
         doc.add(declaracao);
 
         PdfPTable assinaturas = new PdfPTable(2);
@@ -220,7 +434,7 @@ public final class Documentos {
                 "concluiu com aproveitamento o treinamento de "
                 + registro.getNorma() + " - " + registro.getTreinamento()
                 + ", com carga horária de " + numero(registro.getCh()) + " hora(s), "
-                + "realizado em " + data(registro.getData())
+                + periodo(registro)
                 + (turma == null || turma.getLocal() == null ? "" : ", em " + turma.getLocal())
                 + ", atendendo aos requisitos da " + registro.getNorma()
                 + " e da NR-01 item 1.7.",
@@ -281,152 +495,331 @@ public final class Documentos {
         return destino;
     }
 
-    public static File crachasFrentes(Turma turma, Empresa empresa, List<Participante> participantes)
+    private static final float CRACHA_LARGURA = 54f;
+    private static final float CRACHA_ALTURA = 86f;
+
+    public static File crachas(Turma turma, Empresa empresa, List<Participante> participantes)
             throws IOException, DocumentException {
-        File destino = new File(pasta(), "cracha-" + turma.getCodigo() + "-frentes.pdf");
-        Document doc = new Document(PageSize.A4, 12, 12, 14, 14);
+        File destino = new File(pasta(), "cracha-" + turma.getCodigo() + ".pdf");
+        Document doc = new Document(new Rectangle(PageSize.A4.getHeight(), PageSize.A4.getWidth()), mm(10), mm(10), mm(10), mm(10));
         PdfWriter.getInstance(doc, new FileOutputStream(destino));
         doc.open();
-        doc.add(new Paragraph("Crachás - frentes (" + participantes.size() + ") - turma "
-                + turma.getCodigo(), fonte(9, Font.BOLD, CINZA)));
-        doc.add(new Paragraph("Imprima em papel A4 (sem escala) e recorte nas linhas. "
-                + "Tamanho 54 x 86 mm, compatível com porta-crachá de papelaria.",
-                fonte(7, Font.NORMAL, CINZA)));
-        PdfPTable grade = gradeCrachas();
-        int coluna = 0;
-        for (Participante p : participantes) {
-            Colaborador c = new ColaboradorDAO().porId(p.getColaboradorId());
-            grade.addCell(celulaCracha(frenteCracha(p, c, empresa)));
-            if (++coluna % 2 == 0) {
-                grade.completeRow();
+
+        Paragraph titulo = new Paragraph("Crachás - turma " + turma.getCodigo()
+                + " (" + participantes.size() + " participante(s))", fonte(9, Font.BOLD, CINZA));
+        titulo.setSpacingAfter(2);
+        doc.add(titulo);
+        Paragraph instrucoes = new Paragraph("Imprima em A4 paisagem (4 por folha), sem escala (100%). "
+                + "Recorte na borda externa e dobre cada peça ao meio, no tracejado central. "
+                + "Frente à esquerda, verso à direita. Peça aberta: 108 x 86 mm; dobrada: 54 x 86 mm.",
+                fonte(7, Font.NORMAL, CINZA));
+        instrucoes.setSpacingAfter(4);
+        doc.add(instrucoes);
+
+        for (int inicio = 0; inicio < participantes.size(); inicio += 4) {
+            if (inicio > 0) {
+                doc.newPage();
             }
+            PdfPTable grade = new PdfPTable(2);
+            grade.setTotalWidth(mm(CRACHA_LARGURA * 4));
+            grade.setLockedWidth(true);
+            grade.setHorizontalAlignment(Element.ALIGN_CENTER);
+            grade.getDefaultCell().setBorder(Rectangle.NO_BORDER);
+            grade.getDefaultCell().setPadding(0);
+
+            int fim = Math.min(inicio + 4, participantes.size());
+            for (int i = inicio; i < fim; i++) {
+                Participante p = participantes.get(i);
+                Colaborador c = new ColaboradorDAO().porId(p.getColaboradorId());
+                List<RegistroTreinamento> registros = new RegistroDAO().porColaborador(p.getColaboradorId());
+
+                PdfPCell celula = new PdfPCell();
+                celula.setBorder(Rectangle.NO_BORDER);
+                celula.setPadding(0);
+                celula.setFixedHeight(mm(CRACHA_ALTURA));
+                celula.setVerticalAlignment(Element.ALIGN_TOP);
+                celula.setCellEvent(new EventoCorteCracha());
+                celula.addElement(cartaoCracha(p, c, empresa, registros));
+                grade.addCell(celula);
+            }
+            if ((fim - inicio) % 2 != 0) {
+                PdfPCell vazio = new PdfPCell();
+                vazio.setBorder(Rectangle.NO_BORDER);
+                vazio.setPadding(0);
+                vazio.setFixedHeight(mm(CRACHA_ALTURA));
+                grade.addCell(vazio);
+            }
+            doc.add(grade);
         }
-        doc.add(grade);
         doc.close();
         return destino;
     }
 
-    public static File crachasVersos(Turma turma, Empresa empresa, List<Participante> participantes)
+    private static PdfPTable cartaoCracha(Participante p, Colaborador c, Empresa empresa,
+            List<RegistroTreinamento> registros) throws IOException, DocumentException {
+        PdfPTable aberto = new PdfPTable(new float[]{1f, 1f});
+        aberto.setTotalWidth(mm(CRACHA_LARGURA * 2));
+        aberto.setLockedWidth(true);
+        aberto.getDefaultCell().setBorder(Rectangle.NO_BORDER);
+        aberto.getDefaultCell().setPadding(0);
+
+        PdfPCell frente = new PdfPCell(frenteCracha(p, c, empresa));
+        frente.getTable().setExtendLastRow(false);
+        frente.setBorder(Rectangle.NO_BORDER);
+        frente.setPadding(mm(3));
+        frente.setFixedHeight(mm(CRACHA_ALTURA));
+        aberto.addCell(frente);
+
+        PdfPCell verso = new PdfPCell(versoCracha(registros));
+        verso.getTable().setExtendLastRow(false);
+        verso.setBorder(Rectangle.NO_BORDER);
+        verso.setPadding(mm(3));
+        verso.setFixedHeight(mm(CRACHA_ALTURA));
+        aberto.addCell(verso);
+        return aberto;
+    }
+
+    private static PdfPTable frenteCracha(Participante p, Colaborador c, Empresa empresa)
             throws IOException, DocumentException {
-        File destino = new File(pasta(), "cracha-" + turma.getCodigo() + "-versos.pdf");
-        Document doc = new Document(PageSize.A4, 12, 12, 14, 14);
-        PdfWriter.getInstance(doc, new FileOutputStream(destino));
-        doc.open();
-        doc.add(new Paragraph("Crachás - versos (" + participantes.size() + ") - turma "
-                + turma.getCodigo(), fonte(9, Font.BOLD, CINZA)));
-        doc.add(new Paragraph("Imprima este arquivo no verso da folha das frentes.",
-                fonte(7, Font.NORMAL, CINZA)));
-        PdfPTable grade = gradeCrachas();
-        int coluna = 0;
-        for (Participante p : participantes) {
-            List<RegistroTreinamento> registros = new RegistroDAO().porColaborador(p.getColaboradorId());
-            StringBuilder sb = new StringBuilder();
-            int limite = Math.min(5, registros.size());
-            for (int i = 0; i < limite; i++) {
-                RegistroTreinamento r = registros.get(i);
-                sb.append(r.getNorma()).append(" - ").append(numero(r.getCh())).append("h");
-                if (r.getValidade() != null) {
-                    sb.append(" até ").append(r.getValidade()
-                            .format(java.time.format.DateTimeFormatter.ofPattern("MM/yyyy")));
-                }
-                sb.append('\n');
-            }
-            if (registros.size() > limite) {
-                sb.append("+ ").append(registros.size() - limite).append(" outros treinamentos");
-            }
-            grade.addCell(celulaCracha(versoCracha(p, empresa, sb.toString())));
-            if (++coluna % 2 == 0) {
-                grade.completeRow();
-            }
-        }
-        doc.add(grade);
-        doc.close();
-        return destino;
-    }
-
-    private static PdfPTable gradeCrachas() throws DocumentException {
-        PdfPTable grade = new PdfPTable(2);
-        grade.setWidthPercentage(100);
-        grade.setWidths(new float[]{1, 1});
-        grade.setHorizontalAlignment(Element.ALIGN_CENTER);
-        grade.getDefaultCell().setBorder(Rectangle.NO_BORDER);
-        grade.getDefaultCell().setFixedHeight(Utilities.millimetersToPoints(86) + 8);
-        grade.getDefaultCell().setPadding(4);
-        return grade;
-    }
-
-    private static PdfPTable frenteCracha(Participante p, Colaborador c, Empresa empresa) {
         PdfPTable cartao = new PdfPTable(1);
-        cartao.setTotalWidth(Utilities.millimetersToPoints(54));
-        cartao.setLockedWidth(true);
-        PdfPCell dentro = new PdfPCell();
-        dentro.setBorder(Rectangle.BOX);
-        dentro.setBorderColor(BORDA);
-        dentro.setPadding(6);
-        dentro.setFixedHeight(Utilities.millimetersToPoints(86));
+        cartao.setWidthPercentage(100);
+        cartao.setExtendLastRow(false);
+        cartao.getDefaultCell().setBorder(Rectangle.NO_BORDER);
+        cartao.getDefaultCell().setPadding(0);
 
-        Paragraph topo = new Paragraph(empresa == null ? "TreinaNorma" : texto(empresa.nomeExibicao()),
-                fonte(6.5f, Font.BOLD, AZUL));
-        topo.setAlignment(Element.ALIGN_CENTER);
-        dentro.addElement(topo);
+        PdfPTable topo = new PdfPTable(1);
+        topo.setWidthPercentage(100);
+        topo.getDefaultCell().setBorder(Rectangle.NO_BORDER);
+        topo.getDefaultCell().setPadding(0);
+        topo.getDefaultCell().setHorizontalAlignment(Element.ALIGN_CENTER);
 
-        Paragraph nome = new Paragraph(p.getNome(), fonte(9, Font.BOLD, GRAFITE));
+        Image logo = empresa == null ? null : imagemAjustada(empresa.getLogo(), 36, 10);
+        if (logo != null) {
+            PdfPCell celulaLogo = new PdfPCell();
+            celulaLogo.setBorder(Rectangle.NO_BORDER);
+            celulaLogo.setPadding(0);
+            celulaLogo.setHorizontalAlignment(Element.ALIGN_CENTER);
+            logo.setAlignment(Element.ALIGN_CENTER);
+            celulaLogo.addElement(logo);
+            topo.addCell(celulaLogo);
+        } else if (empresa != null) {
+            Paragraph dados = new Paragraph();
+            dados.setAlignment(Element.ALIGN_CENTER);
+            dados.setLeading(7.5f);
+            dados.add(new Chunk(texto(empresa.nomeExibicao()), fonte(7.5f, Font.BOLD, AZUL)));
+            dados.add(Chunk.NEWLINE);
+            dados.add(new Chunk("CNPJ " + texto(empresa.getCnpj()),
+                    fonte(5.2f, Font.NORMAL, CINZA)));
+            topo.addCell(dados);
+        } else {
+            Paragraph vazio = new Paragraph("Informações/logo da empresa",
+                    fonte(5.5f, Font.NORMAL, CINZA));
+            vazio.setAlignment(Element.ALIGN_CENTER);
+            topo.addCell(vazio);
+        }
+
+        PdfPCell celulaTopo = new PdfPCell(topo);
+        celulaTopo.getTable().setExtendLastRow(false);
+        celulaTopo.setBorder(Rectangle.NO_BORDER);
+        celulaTopo.setPadding(0);
+        celulaTopo.setFixedHeight(mm(12));
+        celulaTopo.setHorizontalAlignment(Element.ALIGN_CENTER);
+        celulaTopo.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        cartao.addCell(celulaTopo);
+
+        PdfPCell espaco = new PdfPCell();
+        espaco.setBorder(Rectangle.NO_BORDER);
+        espaco.setPadding(0);
+        espaco.setFixedHeight(mm(2));
+        cartao.addCell(espaco);
+
+        PdfPTable areaFoto = new PdfPTable(1);
+        areaFoto.setTotalWidth(mm(30));
+        areaFoto.setLockedWidth(true);
+        areaFoto.setHorizontalAlignment(Element.ALIGN_CENTER);
+        PdfPCell foto = new PdfPCell();
+        foto.setFixedHeight(mm(40));
+        foto.setPadding(0);
+        foto.setHorizontalAlignment(Element.ALIGN_CENTER);
+        foto.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        Image retrato = c == null ? null : fotoCracha(c.getFoto(), 30, 40);
+        if (retrato != null) {
+            foto.setBorder(Rectangle.NO_BORDER);
+            retrato.setAlignment(Element.ALIGN_CENTER);
+            foto.addElement(retrato);
+        } else {
+            foto.setBorder(Rectangle.BOX);
+            foto.setBorderColor(BORDA);
+            Paragraph vazio = new Paragraph("Foto 3x4", fonte(5.5f, Font.NORMAL, CINZA));
+            vazio.setAlignment(Element.ALIGN_CENTER);
+            foto.addElement(vazio);
+        }
+        areaFoto.addCell(foto);
+
+        PdfPCell celulaFoto = new PdfPCell(areaFoto);
+        celulaFoto.getTable().setExtendLastRow(false);
+        celulaFoto.setBorder(Rectangle.NO_BORDER);
+        celulaFoto.setPadding(0);
+        celulaFoto.setFixedHeight(mm(40));
+        celulaFoto.setHorizontalAlignment(Element.ALIGN_CENTER);
+        celulaFoto.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        cartao.addCell(celulaFoto);
+
+        PdfPCell espaco2 = new PdfPCell();
+        espaco2.setBorder(Rectangle.NO_BORDER);
+        espaco2.setPadding(0);
+        espaco2.setFixedHeight(mm(2));
+        cartao.addCell(espaco2);
+
+        String nomeColaborador = p.getNome() == null || p.getNome().isBlank()
+                ? "Nome do Colaborador" : p.getNome().toUpperCase();
+        Paragraph nome = new Paragraph(nomeColaborador, fonte(9.5f, Font.BOLD, GRAFITE));
         nome.setAlignment(Element.ALIGN_CENTER);
-        nome.setSpacingBefore(6);
-        dentro.addElement(nome);
+        nome.setLeading(10.5f);
+        PdfPCell celulaNome = new PdfPCell(nome);
+        celulaNome.setBorder(Rectangle.NO_BORDER);
+        celulaNome.setPadding(0);
+        celulaNome.setFixedHeight(mm(12));
+        celulaNome.setHorizontalAlignment(Element.ALIGN_CENTER);
+        celulaNome.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        cartao.addCell(celulaNome);
 
-        Paragraph cargo = new Paragraph(texto(p.getCargo()), fonte(7, Font.NORMAL, CINZA));
+        Paragraph cargo = new Paragraph(p.getCargo() == null || p.getCargo().isBlank()
+                ? "Função" : p.getCargo(), fonte(7.5f, Font.NORMAL, CINZA));
         cargo.setAlignment(Element.ALIGN_CENTER);
-        dentro.addElement(cargo);
-
-        Paragraph dados = new Paragraph("CPF " + Cpf.mascarar(p.getCpf())
-                + (c == null || c.getMatricula() == null ? "" : "\nMat. " + c.getMatricula()),
-                fonte(6.5f, Font.NORMAL, CINZA));
-        dados.setAlignment(Element.ALIGN_CENTER);
-        dados.setSpacingBefore(8);
-        dentro.addElement(dados);
-
-        Paragraph rodape = new Paragraph("IDENTIFICAÇÃO INTERNA", fonte(5.5f, Font.NORMAL, CINZA));
-        rodape.setAlignment(Element.ALIGN_CENTER);
-        rodape.setSpacingBefore(8);
-        dentro.addElement(rodape);
-
-        cartao.addCell(dentro);
+        cargo.setLeading(7f);
+        PdfPCell celulaCargo = new PdfPCell(cargo);
+        celulaCargo.setBorder(Rectangle.NO_BORDER);
+        celulaCargo.setPadding(0);
+        celulaCargo.setFixedHeight(mm(8));
+        celulaCargo.setHorizontalAlignment(Element.ALIGN_CENTER);
+        celulaCargo.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        cartao.addCell(celulaCargo);
         return cartao;
     }
 
-    private static PdfPTable versoCracha(Participante p, Empresa empresa, String registros) {
+    private static PdfPTable versoCracha(List<RegistroTreinamento> registros)
+            throws DocumentException {
         PdfPTable cartao = new PdfPTable(1);
-        cartao.setTotalWidth(Utilities.millimetersToPoints(54));
-        cartao.setLockedWidth(true);
-        PdfPCell dentro = new PdfPCell();
-        dentro.setBorder(Rectangle.BOX);
-        dentro.setBorderColor(BORDA);
-        dentro.setPadding(6);
-        dentro.setFixedHeight(Utilities.millimetersToPoints(86));
+        cartao.setWidthPercentage(100);
+        cartao.setExtendLastRow(false);
+        cartao.getDefaultCell().setBorder(Rectangle.NO_BORDER);
+        cartao.getDefaultCell().setPadding(0);
 
-        Paragraph titulo = new Paragraph("TREINAMENTOS", fonte(6.5f, Font.BOLD, AZUL));
-        titulo.setAlignment(Element.ALIGN_CENTER);
-        dentro.addElement(titulo);
+        PdfPTable tabela = new PdfPTable(new float[]{2.2f, 1f, 1f});
+        tabela.setWidthPercentage(100);
+        tabela.setExtendLastRow(false);
+        cabecalhoCracha(tabela, "Treinamentos", "Finalizado", "Vencimento");
 
-        Paragraph nome = new Paragraph(p.getNome(), fonte(7.5f, Font.BOLD, GRAFITE));
-        nome.setAlignment(Element.ALIGN_CENTER);
-        nome.setSpacingAfter(4);
-        dentro.addElement(nome);
-
-        Paragraph lista = new Paragraph(registros, fonte(6, Font.NORMAL, new Color(71, 85, 105)));
-        lista.setLeading(9);
-        dentro.addElement(lista);
-
-        Paragraph rodape = new Paragraph(empresa == null ? "" : texto(empresa.getTelefone())
-                + (empresa.getEmail() == null ? "" : "\n" + empresa.getEmail()),
-                fonte(5.5f, Font.NORMAL, CINZA));
-        rodape.setAlignment(Element.ALIGN_CENTER);
-        rodape.setSpacingBefore(6);
-        dentro.addElement(rodape);
-
-        cartao.addCell(dentro);
+        int limite = Math.min(12, registros.size());
+        for (int i = 0; i < limite; i++) {
+            RegistroTreinamento r = registros.get(i);
+            PdfPCell nome = new PdfPCell();
+            nome.setPadding(2);
+            nome.setBorder(Rectangle.BOTTOM);
+            nome.setBorderColor(BORDA);
+            Paragraph norma = new Paragraph(texto(r.getNorma()), fonte(5.6f, Font.BOLD, GRAFITE));
+            norma.setLeading(6f);
+            nome.addElement(norma);
+            tabela.addCell(nome);
+            LocalDate feito = r.getDataFim() != null ? r.getDataFim() : r.getData();
+            tabela.addCell(celulaCracha(dataCurta(feito), 5.4f, GRAFITE));
+            tabela.addCell(celulaCracha(r.getValidade() == null ? "PGR"
+                    : dataCurta(r.getValidade()), 5.4f, GRAFITE));
+        }
+        if (registros.isEmpty()) {
+            PdfPCell vazio = new PdfPCell(new Phrase("Nenhum treinamento registrado.",
+                    fonte(5.2f, Font.NORMAL, CINZA)));
+            vazio.setColspan(3);
+            vazio.setPadding(3);
+            vazio.setBorderColor(BORDA);
+            tabela.addCell(vazio);
+        } else if (registros.size() > limite) {
+            PdfPCell resto = new PdfPCell(new Phrase("+ " + (registros.size() - limite)
+                    + " outro(s) treinamento(s)", fonte(4.8f, Font.NORMAL, CINZA)));
+            resto.setColspan(3);
+            resto.setPadding(2);
+            resto.setBorderColor(BORDA);
+            tabela.addCell(resto);
+        }
+        cartao.addCell(tabela);
         return cartao;
+    }
+
+    private static void cabecalhoCracha(PdfPTable tabela, String... colunas) {
+        for (String c : colunas) {
+            PdfPCell celula = new PdfPCell(new Phrase(c, fonte(5.2f, Font.BOLD, GRAFITE)));
+            celula.setHorizontalAlignment(Element.ALIGN_CENTER);
+            celula.setVerticalAlignment(Element.ALIGN_MIDDLE);
+            celula.setPadding(2);
+            celula.setBorder(Rectangle.BOTTOM);
+            celula.setBorderColor(GRAFITE);
+            tabela.addCell(celula);
+        }
+    }
+
+    private static PdfPCell celulaCracha(String valor, float tamanho, Color cor) {
+        PdfPCell c = new PdfPCell(new Phrase(valor, fonte(tamanho, Font.NORMAL, cor)));
+        c.setHorizontalAlignment(Element.ALIGN_CENTER);
+        c.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        c.setPadding(2);
+        c.setBorder(Rectangle.BOTTOM);
+        c.setBorderColor(BORDA);
+        return c;
+    }
+
+    private static String dataCurta(LocalDate valor) {
+        return valor == null ? ""
+                : valor.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yy"));
+    }
+
+    private static Image fotoCracha(String caminho, float larguraMm, float alturaMm) {
+        return imagemAjustada(caminho, larguraMm, alturaMm);
+    }
+
+    private static Image imagemAjustada(String caminho, float larguraMm, float alturaMm) {
+        if (caminho == null || caminho.isBlank()) {
+            return null;
+        }
+        File f = Fotos.arquivo(caminho);
+        if (f == null || !f.exists()) {
+            return null;
+        }
+        try {
+            Image img = Image.getInstance(f.getAbsolutePath());
+            img.scaleToFit(mm(larguraMm), mm(alturaMm));
+            return img;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static float mm(float valor) {
+        return Utilities.millimetersToPoints(valor);
+    }
+
+    private static final class EventoCorteCracha implements PdfPCellEvent {
+
+        @Override
+        public void cellLayout(PdfPCell cell, Rectangle position, PdfContentByte[] canvases) {
+            float largura = position.getWidth();
+            float altura = mm(CRACHA_ALTURA);
+            float esquerda = position.getLeft();
+            float topo = position.getTop();
+            PdfContentByte cb = canvases[PdfPTable.LINECANVAS];
+            cb.saveState();
+            cb.setLineWidth(0.4f);
+            cb.setColorStroke(BORDA);
+            cb.rectangle(esquerda, topo - altura, largura, altura);
+            cb.stroke();
+            cb.setLineWidth(0.5f);
+            cb.setColorStroke(GRAFITE);
+            cb.setLineDash(4f, 2f, 0f);
+            cb.moveTo(esquerda + largura / 2f, topo - altura);
+            cb.lineTo(esquerda + largura / 2f, topo);
+            cb.stroke();
+            cb.restoreState();
+        }
     }
 
     private static void cabecalho(Document doc, Empresa empresa, String titulo, String direita)
@@ -489,8 +882,8 @@ public final class Documentos {
         if (caminho == null || caminho.isBlank()) {
             return null;
         }
-        File f = new File(caminho);
-        if (!f.exists()) {
+        File f = Fotos.arquivo(caminho);
+        if (f == null || !f.exists()) {
             return null;
         }
         try {
@@ -540,14 +933,6 @@ public final class Documentos {
         c.setHorizontalAlignment(alinhamento);
         c.setMinimumHeight(altura);
         c.setVerticalAlignment(Element.ALIGN_MIDDLE);
-        return c;
-    }
-
-    private static PdfPCell celulaCracha(PdfPTable conteudo) {
-        PdfPCell c = new PdfPCell();
-        c.setBorder(Rectangle.NO_BORDER);
-        c.setPadding(0);
-        c.addElement(conteudo);
         return c;
     }
 

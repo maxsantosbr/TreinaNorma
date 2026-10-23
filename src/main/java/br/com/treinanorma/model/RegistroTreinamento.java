@@ -14,6 +14,7 @@ public class RegistroTreinamento {
     private String norma;
     private String treinamento;
     private LocalDate data;
+    private LocalDate dataFim;
     private double ch;
     private Integer instrutorId;
     private String instrutorNome;
@@ -42,6 +43,8 @@ public class RegistroTreinamento {
     public void setTreinamento(String v) { this.treinamento = v; }
     public LocalDate getData() { return data; }
     public void setData(LocalDate v) { this.data = v; }
+    public LocalDate getDataFim() { return dataFim; }
+    public void setDataFim(LocalDate v) { this.dataFim = v; }
     public double getCh() { return ch; }
     public void setCh(double v) { this.ch = v; }
     public Integer getInstrutorId() { return instrutorId; }

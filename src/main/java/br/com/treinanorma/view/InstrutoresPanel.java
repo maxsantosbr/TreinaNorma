@@ -212,7 +212,9 @@ public class InstrutoresPanel extends TelaBase {
         JTextField validadeHab = Ui.campo("dd/mm/aaaa");
         validadeHab.setPreferredSize(new Dimension(110, 28));
         JButton adicionar = Ui.secundario("Adicionar");
-        JButton remover = Ui.link("remover selecionada");
+        JButton remover = Ui.link("Remover selecionada");
+        remover.setEnabled(false);
+        listaHab.addListSelectionListener(e -> remover.setEnabled(listaHab.getSelectedIndex() >= 0));
 
         adicionar.addActionListener(e -> {
             String norma = (String) comboNorma.getSelectedItem();
@@ -246,9 +248,16 @@ public class InstrutoresPanel extends TelaBase {
                 BorderFactory.createMatteBorder(1, 0, 0, 0, Ui.BORDA),
                 BorderFactory.createEmptyBorder(10, 0, 0, 0)));
         blocoHab.add(Ui.titulo("Habilitações por NR"), BorderLayout.NORTH);
+        JPanel listaHabPainel = new JPanel(new BorderLayout(0, 6));
+        listaHabPainel.setOpaque(false);
+        listaHabPainel.add(rolagemHab, BorderLayout.CENTER);
+        JPanel acoesHab = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        acoesHab.setOpaque(false);
+        acoesHab.add(remover);
+        listaHabPainel.add(acoesHab, BorderLayout.SOUTH);
         JPanel centroHab = new JPanel(new BorderLayout(10, 0));
         centroHab.setOpaque(false);
-        centroHab.add(rolagemHab, BorderLayout.CENTER);
+        centroHab.add(listaHabPainel, BorderLayout.CENTER);
         JPanel controles = new JPanel();
         controles.setOpaque(false);
         controles.setLayout(new javax.swing.BoxLayout(controles, javax.swing.BoxLayout.Y_AXIS));
@@ -258,7 +267,8 @@ public class InstrutoresPanel extends TelaBase {
         controles.add(javax.swing.Box.createVerticalStrut(4));
         controles.add(Ui.linha(comboNorma, validadeHab));
         controles.add(javax.swing.Box.createVerticalStrut(8));
-        controles.add(Ui.linha(adicionar, remover));
+        adicionar.setAlignmentX(LEFT_ALIGNMENT);
+        controles.add(adicionar);
         controles.add(javax.swing.Box.createVerticalGlue());
         centroHab.add(controles, BorderLayout.EAST);
         blocoHab.add(centroHab, BorderLayout.CENTER);

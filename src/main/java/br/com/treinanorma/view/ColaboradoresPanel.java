@@ -1,13 +1,16 @@
 package br.com.treinanorma.view;
 
 import br.com.treinanorma.dao.ColaboradorDAO;
+import br.com.treinanorma.dao.EmpresaDAO;
 import br.com.treinanorma.dao.RegistroDAO;
 import br.com.treinanorma.dao.SetorDAO;
 import br.com.treinanorma.model.Colaborador;
+import br.com.treinanorma.model.Empresa;
 import br.com.treinanorma.model.RegistroTreinamento;
 import br.com.treinanorma.util.Cpf;
 import br.com.treinanorma.util.Datas;
 import br.com.treinanorma.util.Excel;
+import br.com.treinanorma.util.Fotos;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -15,13 +18,18 @@ import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import javax.swing.BorderFactory;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JDialog;
@@ -150,11 +158,8 @@ public class ColaboradoresPanel extends TelaBase {
     }
 
     private void editar(Colaborador c) {
-        if (c == null && tabela.getSelectedRow() >= 0 && false) {
-            return;
-        }
         Colaborador alvo = c == null ? new Colaborador() : c;
-        JDialog d = Ui.dialogo(this, c == null ? "Novo colaborador" : "Editar colaborador", 560, 520);
+        JDialog d = Ui.dialogo(this, c == null ? "Novo colaborador" : "Editar colaborador", 580, 620);
 
         JPanel form = Ui.formulario();
         GridBagConstraints gbc = Ui.gbc();
@@ -181,6 +186,83 @@ public class ColaboradoresPanel extends TelaBase {
         email.setText(nz(alvo.getEmail()));
         telefone.setText(nz(alvo.getTelefone()));
 
+        final String original = nz(alvo.getFoto());
+        final String[] foto = {original};
+        final boolean[] salvou = {false};
+
+        JLabel miniatura = new JLabel("", JLabel.CENTER);
+        miniatura.setOpaque(true);
+        miniatura.setBackground(new java.awt.Color(0xF4, 0xF7, 0xFA));
+        miniatura.setBorder(BorderFactory.createLineBorder(Ui.BORDA));
+        miniatura.setPreferredSize(new Dimension(54, 72));
+        miniatura.setMinimumSize(new Dimension(54, 72));
+
+        JLabel statusFoto = new JLabel();
+        statusFoto.setFont(Ui.fonte(10, Font.BOLD));
+
+        JButton btnFoto = Ui.secundario("Foto e prévia do crachá...");
+        JPanel infoFoto = new JPanel(new BorderLayout(0, 4));
+        infoFoto.setOpaque(false);
+        infoFoto.add(statusFoto, BorderLayout.NORTH);
+        infoFoto.add(Ui.ajuda("Usada no crachá e nas próximas impressões."), BorderLayout.CENTER);
+        infoFoto.add(Ui.linhaEsquerda(btnFoto), BorderLayout.SOUTH);
+
+        JPanel painelFoto = new JPanel(new BorderLayout(10, 0));
+        painelFoto.setOpaque(false);
+        painelFoto.add(miniatura, BorderLayout.WEST);
+        painelFoto.add(infoFoto, BorderLayout.CENTER);
+
+        Runnable atualizarFoto = () -> {
+            BufferedImage imagem = Fotos.carregar(foto[0]);
+            if (imagem == null) {
+                miniatura.setIcon(null);
+                miniatura.setText("3x4");
+                miniatura.setFont(Ui.fonte(9, Font.PLAIN));
+                miniatura.setForeground(Ui.SUAVE);
+                statusFoto.setText("Sem foto");
+                statusFoto.setForeground(Ui.SUAVE);
+            } else {
+                miniatura.setText("");
+                miniatura.setIcon(new ImageIcon(Fotos.recortar3x4(imagem, 48, 64)));
+                statusFoto.setText("Com foto");
+                statusFoto.setForeground(Ui.VERDE);
+            }
+        };
+        atualizarFoto.run();
+
+        Runnable limparNova = () -> {
+            if (!salvou[0] && !foto[0].equals(original)) {
+                if (!foto[0].isBlank()) {
+                    Fotos.remover(foto[0]);
+                }
+                foto[0] = original;
+            }
+        };
+
+        btnFoto.addActionListener(e -> {
+            try {
+                Colaborador visual = new Colaborador();
+                visual.setId(alvo.getId());
+                visual.setNome(Ui.texto(nome));
+                visual.setCargo(Ui.texto(cargo));
+                visual.setCpf(Cpf.limpar(cpf.getText()));
+                visual.setFoto(foto[0]);
+                Empresa empresa = new EmpresaDAO().obter();
+                FotoCrachaDialog dialog = new FotoCrachaDialog(d, visual, empresa, foto[0]);
+                String nova = dialog.abrir();
+                if (dialog.isAlterou()) {
+                    if (!Objects.equals(foto[0], nova) && !foto[0].isBlank()
+                            && !foto[0].equals(original)) {
+                        Fotos.remover(foto[0]);
+                    }
+                    foto[0] = nova == null ? "" : nova;
+                    atualizarFoto.run();
+                }
+            } catch (RuntimeException ex) {
+                Ui.erro(d, ex);
+            }
+        });
+
         Ui.campo(form, gbc, 0, 0, "Nome completo *", nome, 2);
         Ui.campo(form, gbc, 0, 1, "CPF *", cpf, 1);
         Ui.campo(form, gbc, 1, 1, "Matrícula", matricula, 1);
@@ -193,6 +275,7 @@ public class ColaboradoresPanel extends TelaBase {
         gbc.gridy = 5;
         gbc.gridwidth = 2;
         form.add(ativo, gbc);
+        Ui.campo(form, gbc, 0, 6, "Foto do crachá", painelFoto, 2);
 
         JPanel centro = new JPanel(new BorderLayout());
         centro.setOpaque(false);
@@ -234,19 +317,34 @@ public class ColaboradoresPanel extends TelaBase {
                 alvo.setEmail(Ui.texto(email));
                 alvo.setTelefone(Ui.texto(telefone));
                 alvo.setAtivo(ativo.isSelected());
+                alvo.setFoto(foto[0].isBlank() ? null : foto[0]);
                 Integer setorId = setores.garantir(Ui.texto(setor));
                 alvo.setSetorId(setorId);
                 if (alvo.getEmpresaId() == null) {
                     alvo.setEmpresaId(1);
                 }
                 dao.salvar(alvo);
+                if (!original.isBlank() && !original.equals(foto[0])) {
+                    Fotos.remover(original);
+                }
+                salvou[0] = true;
                 d.dispose();
                 carregar();
             } catch (RuntimeException ex) {
                 Ui.erro(d, ex);
             }
         });
-        cancelar.addActionListener(e -> d.dispose());
+        cancelar.addActionListener(e -> {
+            limparNova.run();
+            d.dispose();
+        });
+        d.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        d.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosed(WindowEvent e) {
+                limparNova.run();
+            }
+        });
 
         d.add(centro, BorderLayout.CENTER);
         d.add(rodape, BorderLayout.SOUTH);
@@ -263,6 +361,7 @@ public class ColaboradoresPanel extends TelaBase {
         }
         try {
             dao.excluir(c.getId());
+            Fotos.remover(c.getFoto());
             carregar();
         } catch (RuntimeException e) {
             Ui.erro(this, e);

@@ -74,6 +74,7 @@ public class CertificadosPanel extends TelaBase {
         tabela.getColumnModel().getColumn(0).setMaxWidth(46);
         tabela.getColumnModel().getColumn(0).setPreferredWidth(46);
         tabela.getColumnModel().getColumn(0).setResizable(false);
+        tabela.getColumnModel().getColumn(3).setPreferredWidth(150);
         tabela.getTableHeader().setToolTipText(
                 "Clique no cabeçalho Sel. para marcar/desmarcar todos os visíveis");
         tabela.getTableHeader().addMouseListener(new MouseAdapter() {
@@ -194,6 +195,15 @@ public class CertificadosPanel extends TelaBase {
         }
     }
 
+    private String periodo(RegistroTreinamento r) {
+        if (r.getData() == null) {
+            return "";
+        }
+        if (r.getDataFim() != null && !r.getDataFim().equals(r.getData())) {
+            return Datas.br(r.getData()) + " a " + Datas.br(r.getDataFim());
+        }
+        return Datas.br(r.getData());
+    }
     private void carregar() {
         try {
             lista.clear();
@@ -204,7 +214,7 @@ public class CertificadosPanel extends TelaBase {
                 modelo.addRow(new Object[]{marcados.contains(r.getId()),
                     r.getColaboradorNome(),
                     r.getNorma() + " - " + r.getTreinamento(),
-                    Datas.br(r.getData()),
+                    periodo(r),
                     r.getValidade() == null ? "Revisar PGR" : Datas.br(r.getValidade()),
                     situacao(r),
                     r.getNumeroCertificado() == null ? "Não emitido" : r.getNumeroCertificado(),
@@ -504,7 +514,7 @@ public class CertificadosPanel extends TelaBase {
                 resultado.setText("<html><b>Certificado válido</b><br>" + r.getColaboradorNome()
                         + " - CPF " + Cpf.formatar(r.getColaboradorCpf()) + "<br>"
                         + r.getNorma() + " - " + r.getTreinamento() + "<br>"
-                        + "Realizado em " + Datas.br(r.getData()) + " | CH " + r.getCh() + " h"
+                        + "Realizado em " + periodo(r) + " | CH " + r.getCh() + " h"
                         + (r.getValidade() == null ? " | validade pelo PGR"
                         : " | válido até " + Datas.br(r.getValidade())) + "<br>"
                         + r.getNumeroCertificado() + " | " + r.getCodigoVerificacao() + "</html>");

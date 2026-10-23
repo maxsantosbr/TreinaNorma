@@ -1,5 +1,6 @@
 package br.com.treinanorma.dao;
 
+import br.com.treinanorma.model.Encontro;
 import br.com.treinanorma.model.MatrizItem;
 import br.com.treinanorma.model.Participante;
 import br.com.treinanorma.model.Turma;
@@ -13,12 +14,18 @@ import java.sql.Statement;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class TurmaDAO {
 
     private static final String BASE = "SELECT t.*, i.nome AS instrutor_nome, "
-            + "(SELECT COUNT(*) FROM turma_participante p WHERE p.turma_id = t.id) AS participantes "
+            + "(SELECT COUNT(*) FROM turma_participante p WHERE p.turma_id = t.id) AS participantes, "
+            + "(SELECT MIN(e.data) FROM turma_encontro e WHERE e.turma_id = t.id) AS primeira_data, "
+            + "(SELECT MAX(e.data) FROM turma_encontro e WHERE e.turma_id = t.id) AS ultima_data "
             + "FROM turma t LEFT JOIN instrutor i ON i.id = t.instrutor_id ";
 
     public List<Turma> listar(String termo) {
@@ -272,11 +279,281 @@ public class TurmaDAO {
         }
     }
 
+    public List<Encontro> encontros(int turmaId) {
+        List<Encontro> lista = new ArrayList<>();
+        String sql = "SELECT * FROM turma_encontro WHERE turma_id = ? ORDER BY data, ordem, id";
+        try (Connection con = Conexao.abrir();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setInt(1, turmaId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Encontro e = new Encontro();
+                    e.setId(rs.getInt("id"));
+                    e.setTurmaId(rs.getInt("turma_id"));
+                    e.setOrdem(rs.getInt("ordem"));
+                    e.setData(Datas.ler(rs.getString("data")));
+                    e.setHoraInicio(rs.getString("hora_inicio"));
+                    e.setHoraFim(rs.getString("hora_fim"));
+                    e.setCh(rs.getDouble("ch"));
+                    e.setPratica(rs.getInt("pratica") == 1);
+                    e.setConteudo(rs.getString("conteudo"));
+                    lista.add(e);
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Erro ao listar encontros", e);
+        }
+        return lista;
+    }
+
+    public void salvarEncontros(int turmaId, List<Encontro> lista) {
+        if (lista == null || lista.isEmpty()) {
+            throw new IllegalStateException("A turma precisa de pelo menos um dia de treinamento.");
+        }
+        List<Encontro> ordenada = new ArrayList<>(lista);
+        ordenada.sort((a, b) -> {
+            if (a.getData() == null && b.getData() == null) {
+                return Integer.compare(a.getOrdem(), b.getOrdem());
+            }
+            if (a.getData() == null) {
+                return 1;
+            }
+            if (b.getData() == null) {
+                return -1;
+            }
+            int c = a.getData().compareTo(b.getData());
+            return c != 0 ? c : Integer.compare(a.getOrdem(), b.getOrdem());
+        });
+        try (Connection con = Conexao.abrir()) {
+            con.setAutoCommit(false);
+            try {
+                Set<Integer> existentes = new HashSet<>();
+                try (PreparedStatement ps = con.prepareStatement(
+                        "SELECT id FROM turma_encontro WHERE turma_id = ?")) {
+                    ps.setInt(1, turmaId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            existentes.add(rs.getInt(1));
+                        }
+                    }
+                }
+                Set<Integer> manter = new HashSet<>();
+                for (Encontro e : ordenada) {
+                    if (e.getId() > 0 && existentes.contains(e.getId())) {
+                        manter.add(e.getId());
+                    }
+                }
+                try (PreparedStatement ps = con.prepareStatement(
+                        "DELETE FROM turma_encontro WHERE turma_id = ? AND id = ?")) {
+                    for (Integer id : existentes) {
+                        if (!manter.contains(id)) {
+                            ps.setInt(1, turmaId);
+                            ps.setInt(2, id);
+                            ps.addBatch();
+                        }
+                    }
+                    ps.executeBatch();
+                }
+                String insert = "INSERT INTO turma_encontro (turma_id, ordem, data, hora_inicio, "
+                        + "hora_fim, ch, pratica, conteudo) VALUES (?,?,?,?,?,?,?,?)";
+                String update = "UPDATE turma_encontro SET ordem=?, data=?, hora_inicio=?, hora_fim=?, "
+                        + "ch=?, pratica=?, conteudo=? WHERE id=? AND turma_id=?";
+                try (PreparedStatement ins = con.prepareStatement(insert, Statement.RETURN_GENERATED_KEYS);
+                     PreparedStatement upd = con.prepareStatement(update)) {
+                    for (int i = 0; i < ordenada.size(); i++) {
+                        Encontro e = ordenada.get(i);
+                        e.setOrdem(i + 1);
+                        if (e.getId() > 0 && manter.contains(e.getId())) {
+                            upd.setInt(1, i + 1);
+                            upd.setString(2, Datas.iso(e.getData()));
+                            upd.setString(3, e.getHoraInicio());
+                            upd.setString(4, e.getHoraFim());
+                            upd.setDouble(5, e.getCh());
+                            upd.setInt(6, e.isPratica() ? 1 : 0);
+                            upd.setString(7, e.getConteudo());
+                            upd.setInt(8, e.getId());
+                            upd.setInt(9, turmaId);
+                            upd.addBatch();
+                        } else {
+                            ins.setInt(1, turmaId);
+                            ins.setInt(2, i + 1);
+                            ins.setString(3, Datas.iso(e.getData()));
+                            ins.setString(4, e.getHoraInicio());
+                            ins.setString(5, e.getHoraFim());
+                            ins.setDouble(6, e.getCh());
+                            ins.setInt(7, e.isPratica() ? 1 : 0);
+                            ins.setString(8, e.getConteudo());
+                            ins.executeUpdate();
+                            try (ResultSet rs = ins.getGeneratedKeys()) {
+                                if (rs.next()) {
+                                    e.setId(rs.getInt(1));
+                                }
+                            }
+                        }
+                    }
+                    upd.executeBatch();
+                }
+                double total = 0;
+                double pratica = 0;
+                for (Encontro e : ordenada) {
+                    total += e.getCh();
+                    if (e.isPratica()) {
+                        pratica += e.getCh();
+                    }
+                }
+                Encontro primeiro = ordenada.get(0);
+                try (PreparedStatement ps = con.prepareStatement(
+                        "UPDATE turma SET data=?, hora_inicio=?, hora_fim=?, ch_total=?, "
+                        + "ch_presencial=? WHERE id=?")) {
+                    ps.setString(1, Datas.iso(primeiro.getData()));
+                    ps.setString(2, primeiro.getHoraInicio());
+                    ps.setString(3, primeiro.getHoraFim());
+                    ps.setDouble(4, total);
+                    ps.setDouble(5, pratica);
+                    ps.setInt(6, turmaId);
+                    ps.executeUpdate();
+                }
+                sincronizarPresenca(con, turmaId);
+                con.commit();
+            } catch (Exception e) {
+                con.rollback();
+                throw e;
+            } finally {
+                con.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Erro ao salvar encontros", e);
+        }
+    }
+
+    public Map<Integer, Set<Integer>> presencas(int turmaId) {
+        Map<Integer, Set<Integer>> mapa = new HashMap<>();
+        String sql = "SELECT ep.encontro_id, ep.participante_id FROM turma_encontro_presenca ep "
+                + "JOIN turma_encontro e ON e.id = ep.encontro_id "
+                + "WHERE e.turma_id = ? AND ep.presente = 1";
+        try (Connection con = Conexao.abrir()) {
+            try (PreparedStatement ps = con.prepareStatement(sql)) {
+                ps.setInt(1, turmaId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        mapa.computeIfAbsent(rs.getInt("encontro_id"), k -> new HashSet<>())
+                                .add(rs.getInt("participante_id"));
+                    }
+                }
+            }
+            if (mapa.isEmpty()) {
+                List<Integer> dias = new ArrayList<>();
+                try (PreparedStatement ps = con.prepareStatement(
+                        "SELECT id FROM turma_encontro WHERE turma_id = ? ORDER BY ordem")) {
+                    ps.setInt(1, turmaId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            dias.add(rs.getInt(1));
+                        }
+                    }
+                }
+                Set<Integer> legado = new HashSet<>();
+                try (PreparedStatement ps = con.prepareStatement(
+                        "SELECT id FROM turma_participante WHERE turma_id = ? AND presente = 1")) {
+                    ps.setInt(1, turmaId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            legado.add(rs.getInt(1));
+                        }
+                    }
+                }
+                if (!legado.isEmpty()) {
+                    for (Integer dia : dias) {
+                        mapa.put(dia, new HashSet<>(legado));
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Erro ao listar presenças", e);
+        }
+        return mapa;
+    }
+    public void salvarPresencas(int encontroId, Map<Integer, Boolean> presencas) {
+        String sql = "INSERT INTO turma_encontro_presenca (encontro_id, participante_id, presente) "
+                + "VALUES (?,?,?) ON CONFLICT (encontro_id, participante_id) "
+                + "DO UPDATE SET presente = excluded.presente";
+        try (Connection con = Conexao.abrir();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            for (Map.Entry<Integer, Boolean> par : presencas.entrySet()) {
+                ps.setInt(1, encontroId);
+                ps.setInt(2, par.getKey());
+                ps.setInt(3, Boolean.TRUE.equals(par.getValue()) ? 1 : 0);
+                ps.addBatch();
+            }
+            ps.executeBatch();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Erro ao salvar presenças", e);
+        }
+    }
+
+    public void sincronizarPresenca(int turmaId) {
+        try (Connection con = Conexao.abrir()) {
+            sincronizarPresenca(con, turmaId);
+        } catch (SQLException e) {
+            throw new IllegalStateException("Erro ao sincronizar presença", e);
+        }
+    }
+
+    private void sincronizarPresenca(Connection con, int turmaId) throws SQLException {
+        int total = 0;
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT COUNT(*) FROM turma_encontro WHERE turma_id = ?")) {
+            ps.setInt(1, turmaId);
+            try (ResultSet rs = ps.executeQuery()) {
+                total = rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+        if (total == 0) {
+            return;
+        }
+        String sql = "UPDATE turma_participante SET presente = CASE WHEN ("
+                + "SELECT COUNT(*) FROM turma_encontro_presenca ep "
+                + "JOIN turma_encontro e ON e.id = ep.encontro_id "
+                + "WHERE e.turma_id = ? AND ep.participante_id = turma_participante.id "
+                + "AND ep.presente = 1) >= ? THEN 1 ELSE 0 END WHERE turma_id = ?";
+        try (PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setInt(1, turmaId);
+            ps.setInt(2, total);
+            ps.setInt(3, turmaId);
+            ps.executeUpdate();
+        }
+    }
+
+    public void salvarAprovacao(List<Participante> participantes) {
+        String sql = "UPDATE turma_participante SET aprovado = ?, eletronica = ?, "
+                + "observacao = ? WHERE id = ?";
+        try (Connection con = Conexao.abrir();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            for (Participante p : participantes) {
+                if (p.getAprovado() == null) {
+                    ps.setObject(1, null);
+                } else {
+                    ps.setInt(1, p.getAprovado() ? 1 : 0);
+                }
+                ps.setInt(2, p.isEletronica() ? 1 : 0);
+                ps.setString(3, p.getObservacao());
+                ps.setInt(4, p.getId());
+                ps.addBatch();
+            }
+            ps.executeBatch();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Erro ao salvar aprovação", e);
+        }
+    }
+
     public int concluir(int turmaId, String usuario) {
         Turma t = porId(turmaId);
         if (t == null) {
             throw new IllegalStateException("Turma não encontrada");
         }
+        List<Encontro> encontros = encontros(turmaId);
+        LocalDate fim = encontros.isEmpty() ? t.getData()
+                : encontros.get(encontros.size() - 1).getData();
         List<Participante> lista = participantes(turmaId);
         Integer meses = null;
         if (t.getMatrizId() != null) {
@@ -287,39 +564,54 @@ public class TurmaDAO {
         }
         int gerados = 0;
         try (Connection con = Conexao.abrir()) {
+            sincronizarPresenca(con, turmaId);
             try (PreparedStatement del = con.prepareStatement(
                     "DELETE FROM registro_treinamento WHERE turma_id = ? "
                     + "AND id NOT IN (SELECT registro_id FROM certificado)")) {
                 del.setInt(1, turmaId);
                 del.executeUpdate();
             }
+            try (PreparedStatement ps = con.prepareStatement(
+                    "SELECT id, presente FROM turma_participante WHERE turma_id = ?")) {
+                ps.setInt(1, turmaId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    Map<Integer, Boolean> presenca = new HashMap<>();
+                    while (rs.next()) {
+                        presenca.put(rs.getInt("id"), rs.getInt("presente") == 1);
+                    }
+                    for (Participante p : lista) {
+                        p.setPresente(Boolean.TRUE.equals(presenca.get(p.getId())));
+                    }
+                }
+            }
             String sql = "INSERT INTO registro_treinamento (colaborador_id, turma_id, norma, "
-                    + "treinamento, data, ch, instrutor_id, validade_meses, validade, situacao) "
-                    + "VALUES (?,?,?,?,?,?,?,?,?,?)";
+                    + "treinamento, data, data_fim, ch, instrutor_id, validade_meses, validade, situacao) "
+                    + "VALUES (?,?,?,?,?,?,?,?,?,?,?)";
             try (PreparedStatement ps = con.prepareStatement(sql)) {
                 for (Participante p : lista) {
                     if (!p.isPresente() || Boolean.FALSE.equals(p.getAprovado())) {
                         continue;
                     }
-                    LocalDate validade = Datas.validade(t.getData(), meses);
+                    LocalDate validade = Datas.validade(fim, meses);
                     ps.setInt(1, p.getColaboradorId());
                     ps.setInt(2, turmaId);
                     ps.setString(3, t.getNorma());
                     ps.setString(4, t.getTreinamento());
                     ps.setString(5, Datas.iso(t.getData()));
-                    ps.setDouble(6, t.getChTotal());
+                    ps.setString(6, Datas.iso(fim));
+                    ps.setDouble(7, t.getChTotal());
                     if (t.getInstrutorId() == null) {
-                        ps.setObject(7, null);
-                    } else {
-                        ps.setInt(7, t.getInstrutorId());
-                    }
-                    if (meses == null) {
                         ps.setObject(8, null);
                     } else {
-                        ps.setInt(8, meses);
+                        ps.setInt(8, t.getInstrutorId());
                     }
-                    ps.setString(9, Datas.iso(validade));
-                    ps.setString(10, "VALIDO");
+                    if (meses == null) {
+                        ps.setObject(9, null);
+                    } else {
+                        ps.setInt(9, meses);
+                    }
+                    ps.setString(10, Datas.iso(validade));
+                    ps.setString(11, "VALIDO");
                     ps.addBatch();
                     gerados++;
                 }
@@ -327,7 +619,7 @@ public class TurmaDAO {
             }
             String concluida = LocalDateTime.now().toString();
             String hash = Hash.sha256("ata|" + t.getId() + "|" + t.getCodigo() + "|"
-                    + Datas.iso(t.getData()) + "|" + gerados + "|" + concluida);
+                    + Datas.iso(t.getData()) + "|" + Datas.iso(fim) + "|" + gerados + "|" + concluida);
             try (PreparedStatement ps = con.prepareStatement(
                     "UPDATE turma SET status = 'CONCLUIDA', concluida_em = ?, hash_ata = ? WHERE id = ?")) {
                 ps.setString(1, concluida);
@@ -354,6 +646,7 @@ public class TurmaDAO {
         t.setNorma(rs.getString("norma"));
         t.setTreinamento(rs.getString("treinamento"));
         t.setData(Datas.ler(rs.getString("data")));
+        t.setDataFim(Datas.ler(rs.getString("ultima_data")));
         t.setHoraInicio(rs.getString("hora_inicio"));
         t.setHoraFim(rs.getString("hora_fim"));
         t.setLocal(rs.getString("local"));

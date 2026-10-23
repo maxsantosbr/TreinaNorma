@@ -222,6 +222,28 @@ public final class Conexao {
             )
             """,
             """
+            CREATE TABLE IF NOT EXISTS turma_encontro (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                turma_id INTEGER NOT NULL REFERENCES turma(id) ON DELETE CASCADE,
+                ordem INTEGER NOT NULL DEFAULT 1,
+                data TEXT NOT NULL,
+                hora_inicio TEXT,
+                hora_fim TEXT,
+                ch REAL NOT NULL DEFAULT 0,
+                pratica INTEGER NOT NULL DEFAULT 0,
+                conteudo TEXT
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS turma_encontro_presenca (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                encontro_id INTEGER NOT NULL REFERENCES turma_encontro(id) ON DELETE CASCADE,
+                participante_id INTEGER NOT NULL REFERENCES turma_participante(id) ON DELETE CASCADE,
+                presente INTEGER NOT NULL DEFAULT 0,
+                UNIQUE (encontro_id, participante_id)
+            )
+            """,
+            """
             CREATE TABLE IF NOT EXISTS registro_treinamento (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 colaborador_id INTEGER NOT NULL REFERENCES colaborador(id) ON DELETE CASCADE,
@@ -284,12 +306,30 @@ public final class Conexao {
             "CREATE INDEX IF NOT EXISTS ix_colaborador_nome ON colaborador (nome)",
             "CREATE INDEX IF NOT EXISTS ix_turma_data ON turma (data)",
             "CREATE INDEX IF NOT EXISTS ix_registro_colab ON registro_treinamento (colaborador_id, norma)",
-            "CREATE INDEX IF NOT EXISTS ix_participante_turma ON turma_participante (turma_id)"
+            "CREATE INDEX IF NOT EXISTS ix_participante_turma ON turma_participante (turma_id)",
+            "CREATE INDEX IF NOT EXISTS ix_encontro_turma ON turma_encontro (turma_id, data)",
+            "CREATE INDEX IF NOT EXISTS ix_encontro_presenca ON turma_encontro_presenca (encontro_id)"
         };
         try (Statement st = con.createStatement()) {
             for (String comando : sql) {
                 st.execute(comando);
             }
+        }
+        garantirColuna(con, "registro_treinamento", "data_fim", "TEXT");
+    }
+
+    private static void garantirColuna(Connection con, String tabela, String coluna, String tipo)
+            throws SQLException {
+        try (Statement st = con.createStatement();
+             ResultSet rs = st.executeQuery("PRAGMA table_info(" + tabela + ")")) {
+            while (rs.next()) {
+                if (coluna.equalsIgnoreCase(rs.getString("name"))) {
+                    return;
+                }
+            }
+        }
+        try (Statement st = con.createStatement()) {
+            st.execute("ALTER TABLE " + tabela + " ADD COLUMN " + coluna + " " + tipo);
         }
     }
 
