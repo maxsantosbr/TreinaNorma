@@ -127,11 +127,17 @@ public class LoginFrame extends javax.swing.JFrame {
         });
         painelFundo.add(btnLogin, new org.netbeans.lib.awtextra.AbsoluteConstraints(130, 420, 120, 30));
 
-        btnRecuperarSenha.setText("Esqueceu a senha? Clique aqui.");
+        btnRecuperarSenha.setText("Esqueceu a senha?");
+        btnRecuperarSenha.setToolTipText("Registrar solicitação de redefinição de senha");
         btnRecuperarSenha.setBorderPainted(false);
         btnRecuperarSenha.setContentAreaFilled(false);
         btnRecuperarSenha.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
         btnRecuperarSenha.setSelected(true);
+        btnRecuperarSenha.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnRecuperarSenhaActionPerformed(evt);
+            }
+        });
         painelFundo.add(btnRecuperarSenha, new org.netbeans.lib.awtextra.AbsoluteConstraints(294, 360, 210, -1));
 
         checkLembreme.setText("Lembre-me");
@@ -173,6 +179,113 @@ public class LoginFrame extends javax.swing.JFrame {
     private void campoSenhaActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_campoSenhaActionPerformed
         btnLogin.requestFocusInWindow();
     }//GEN-LAST:event_campoSenhaActionPerformed
+
+    private void btnRecuperarSenhaActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnRecuperarSenhaActionPerformed
+        javax.swing.JDialog d = Ui.dialogo(this, "Recuperar senha", 500, 330);
+        javax.swing.JTextField login = Ui.campo("seu login");
+        login.setText(txtUsuario.getText().trim());
+
+        javax.swing.JTextArea texto = new javax.swing.JTextArea(
+                "Registre a solicitação e informe o protocolo a um administrador.\n\n"
+                + "O administrador definirá uma senha temporária. No próximo acesso, "
+                + "você deverá cadastrar uma nova senha.");
+        texto.setEditable(false);
+        texto.setLineWrap(true);
+        texto.setWrapStyleWord(true);
+        texto.setRows(3);
+        texto.setOpaque(false);
+        texto.setFont(Ui.fonte(12, java.awt.Font.PLAIN));
+        texto.setForeground(Ui.SUAVE);
+        texto.setBorder(null);
+
+        javax.swing.JPanel form = Ui.formulario();
+        java.awt.GridBagConstraints gbc = Ui.gbc();
+        Ui.campo(form, gbc, 0, 0, "Login", login, 1);
+
+        javax.swing.JPanel corpo = new javax.swing.JPanel(new java.awt.BorderLayout(0, 10));
+        corpo.setOpaque(false);
+        corpo.setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 18, 8, 18));
+        corpo.add(texto, java.awt.BorderLayout.NORTH);
+        corpo.add(form, java.awt.BorderLayout.CENTER);
+
+        javax.swing.JButton registrar = Ui.primario("Registrar solicitação");
+        javax.swing.JButton cancelar = Ui.secundario("Cancelar");
+        javax.swing.JPanel rodape = new javax.swing.JPanel(
+                new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 8, 8));
+        rodape.add(cancelar);
+        rodape.add(registrar);
+        d.getRootPane().setDefaultButton(registrar);
+
+        registrar.addActionListener(e -> {
+            String valor = Ui.texto(login);
+            if (valor.isEmpty()) {
+                Ui.aviso(d, "Informe seu login.");
+                login.requestFocusInWindow();
+                return;
+            }
+            try {
+                String protocolo = new br.com.treinanorma.dao.SolicitacaoSenhaDAO().registrar(valor);
+                d.dispose();
+                mostrarProtocolo(protocolo);
+            } catch (RuntimeException ex) {
+                Ui.erro(d, ex);
+            }
+        });
+        cancelar.addActionListener(e -> d.dispose());
+
+        d.add(corpo, java.awt.BorderLayout.CENTER);
+        d.add(rodape, java.awt.BorderLayout.SOUTH);
+        d.setVisible(true);
+    }//GEN-LAST:event_btnRecuperarSenhaActionPerformed
+
+    private void mostrarProtocolo(String protocolo) {
+        javax.swing.JDialog d = Ui.dialogo(this, "Solicitação registrada", 480, 290);
+        javax.swing.JTextArea texto = new javax.swing.JTextArea(
+                "Informe este protocolo a um administrador para que ele redefina sua senha.");
+        texto.setEditable(false);
+        texto.setLineWrap(true);
+        texto.setWrapStyleWord(true);
+        texto.setRows(2);
+        texto.setOpaque(false);
+        texto.setFont(Ui.fonte(12, java.awt.Font.PLAIN));
+        texto.setForeground(Ui.SUAVE);
+        texto.setBorder(null);
+
+        javax.swing.JTextField campo = Ui.campo();
+        campo.setText(protocolo);
+        campo.setEditable(false);
+        campo.setHorizontalAlignment(javax.swing.JTextField.CENTER);
+        campo.setFont(Ui.fonte(16, java.awt.Font.BOLD));
+
+        javax.swing.JPanel centro = new javax.swing.JPanel(new java.awt.BorderLayout(0, 12));
+        centro.setOpaque(false);
+        centro.add(texto, java.awt.BorderLayout.NORTH);
+        centro.add(campo, java.awt.BorderLayout.CENTER);
+
+        javax.swing.JPanel corpo = new javax.swing.JPanel(new java.awt.BorderLayout());
+        corpo.setOpaque(false);
+        corpo.setBorder(javax.swing.BorderFactory.createEmptyBorder(18, 18, 8, 18));
+        corpo.add(centro, java.awt.BorderLayout.CENTER);
+
+        javax.swing.JButton copiar = Ui.secundario("Copiar protocolo");
+        copiar.addActionListener(e -> {
+            java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .setContents(new java.awt.datatransfer.StringSelection(protocolo), null);
+            copiar.setText("Protocolo copiado");
+            copiar.setEnabled(false);
+        });
+        javax.swing.JButton fechar = Ui.primario("Fechar");
+        fechar.addActionListener(e -> d.dispose());
+        javax.swing.JPanel rodape = new javax.swing.JPanel(
+                new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 8, 8));
+        rodape.add(copiar);
+        rodape.add(fechar);
+        d.getRootPane().setDefaultButton(fechar);
+
+        d.add(corpo, java.awt.BorderLayout.CENTER);
+        d.add(rodape, java.awt.BorderLayout.SOUTH);
+        d.setVisible(true);
+    }
 
     private void btnLoginActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnLoginActionPerformed
         String usuario = txtUsuario.getText().trim();

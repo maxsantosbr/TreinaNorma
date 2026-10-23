@@ -43,6 +43,30 @@ public class UsuarioDAO {
         }
     }
 
+    public Usuario porLogin(String login) {
+        String sql = "SELECT id, nome, usuario, perfil, ativo, deve_trocar_senha "
+                + "FROM usuarios WHERE usuario = ? COLLATE NOCASE";
+        try (Connection con = Conexao.abrir();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, login == null ? "" : login.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+                Usuario u = new Usuario();
+                u.setId(rs.getInt("id"));
+                u.setNome(rs.getString("nome"));
+                u.setUsuario(rs.getString("usuario"));
+                u.setPerfil(Perfil.valueOf(rs.getString("perfil")));
+                u.setAtivo(rs.getInt("ativo") == 1);
+                u.setDeveTrocarSenha(rs.getInt("deve_trocar_senha") == 1);
+                return u;
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Erro ao buscar usuário", e);
+        }
+    }
+
     public List<Usuario> listar(String termo) {
         List<Usuario> lista = new ArrayList<>();
         StringBuilder sql = new StringBuilder("SELECT * FROM usuarios WHERE 1=1 ");

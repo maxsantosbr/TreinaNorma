@@ -59,6 +59,28 @@ public final class Conexao {
             )
             """,
             """
+            CREATE TABLE IF NOT EXISTS solicitacao_senha (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                protocolo TEXT UNIQUE,
+                usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+                login TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'PENDENTE'
+                    CHECK (status IN ('PENDENTE','ATENDIDA','CANCELADA')),
+                criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                atendido_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+                atendido_em TEXT
+            )
+            """,
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_solicitacao_senha_pendente
+                ON solicitacao_senha(login COLLATE NOCASE)
+                WHERE status = 'PENDENTE'
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_solicitacao_senha_status
+                ON solicitacao_senha(status, criado_em)
+            """,
+            """
             CREATE TABLE IF NOT EXISTS empresa (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 razao_social TEXT NOT NULL,
